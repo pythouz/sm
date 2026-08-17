@@ -3,342 +3,179 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pulse Enterprise - Sovereign P2P Mesh</title>
+    <title>Pulse - Instant P2P Platform</title>
+    <!-- Nostr Tools for Feed -->
     <script src="https://unpkg.com/nostr-tools@1.17.0/lib/nostr.bundle.js"></script>
+    <!-- PeerJS for Instant Low-Latency WebRTC Voice -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root {
-            --bg: #090d16;
-            --panel: #111827;
-            --panel-border: #1f2937;
-            --accent: #6366f1;
-            --accent-glow: rgba(99, 102, 241, 0.25);
+            --bg: #0b0f19;
+            --card: #151d2a;
+            --border: #232d3f;
+            --accent: #4f46e5;
             --success: #10b981;
             --danger: #ef4444;
-            --text-main: #f9fafb;
-            --text-muted: #9ca3af;
+            --text: #f3f4f6;
+            --muted: #9ca3af;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--bg);
-            color: var(--text-main);
-            padding: 24px;
-            display: flex;
-            justify-content: center;
-        }
-
-        .app-container {
-            width: 100%;
-            max-width: 680px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .header-panel {
-            background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
-            border: 1px solid #312e81;
-            border-radius: 16px;
-            padding: 20px;
-            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
-        }
-
-        .title-group {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .title-group h1 { font-size: 1.25rem; letter-spacing: -0.02em; color: #e0e7ff; }
-        .network-badge { font-size: 0.75rem; padding: 4px 10px; border-radius: 9999px; background: rgba(16, 185, 129, 0.1); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.2); }
-
-        .meta-info { font-size: 0.8rem; color: var(--text-muted); font-family: monospace; }
-
-        .card {
-            background: var(--panel);
-            border: 1px solid var(--panel-border);
-            border-radius: 16px;
-            padding: 20px;
-        }
-
-        .card h2 { font-size: 1rem; color: var(--text-main); margin-bottom: 12px; }
-
-        .input-group { display: flex; gap: 8px; margin-bottom: 12px; }
-
-        input[type="text"], textarea {
-            width: 100%;
-            background: #030712;
-            border: 1px solid var(--panel-border);
-            border-radius: 10px;
-            color: var(--text-main);
-            padding: 12px;
-            font-size: 0.9rem;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-
-        input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
-        textarea { height: 90px; resize: none; }
-
-        .btn {
-            background: var(--accent);
-            color: #fff;
-            border: none;
-            border-radius: 10px;
-            padding: 10px 18px;
-            font-weight: 600;
-            font-size: 0.875rem;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 4px 12px var(--accent-glow);
-        }
-
-        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
-        .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-        .btn-danger { background: var(--danger); box-shadow: none; }
-
-        .grid-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
-        .stat-box { background: #030712; border: 1px solid var(--panel-border); padding: 10px; border-radius: 8px; text-align: center; }
-        .stat-label { font-size: 0.7rem; color: var(--text-muted); }
-        .stat-value { font-size: 0.9rem; font-weight: bold; margin-top: 2px; }
-
-        .feed-container { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
-        .post-card { background: #030712; border: 1px solid var(--panel-border); border-radius: 10px; padding: 14px; }
-        .post-header { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
-        .post-body { font-size: 0.9rem; line-height: 1.4; word-break: break-word; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 16px; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+        h2 { font-size: 1.1rem; color: #a5b4fc; margin-bottom: 12px; }
         
-        #remote-audio-container { display: none; }
+        input, textarea { width: 100%; background: #070a12; border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px; margin-bottom: 10px; outline: none; }
+        textarea { height: 70px; resize: none; }
+
+        .btn { background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn:hover { opacity: 0.9; }
+        .btn-danger { background: var(--danger); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .status-bar { font-size: 0.8rem; color: var(--muted); margin-top: 8px; display: flex; justify-content: space-between; }
+        .badge { background: var(--border); padding: 3px 8px; border-radius: 6px; }
+        .badge.active { background: var(--success); color: black; }
+
+        .feed-item { border-bottom: 1px solid var(--border); padding: 10px 0; }
+        .feed-item:last-child { border-bottom: none; }
+        .feed-header { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; }
     </style>
 </head>
 <body>
 
-<div class="app-container">
-    <div class="header-panel">
-        <div class="title-group">
-            <h1>PULSE ENGINE v2.0</h1>
-            <span class="network-badge" id="net-status">جاري الربط...</span>
-        </div>
-        <div class="meta-info" id="pubkey-display">الهوية: ...</div>
-    </div>
-
-    <!-- Voice Control -->
+<div class="container">
+    <!-- Identity -->
     <div class="card">
-        <h2>الغرفة الصوتية المباشرة (Ultra-Low Latency Mesh)</h2>
-        <div class="input-group">
-            <input type="text" id="room-id" placeholder="اسم الغرفة" value="main-room" />
-            <button class="btn" id="btn-room" onclick="toggleRoom()">دخول الغرفة</button>
-            <button class="btn btn-danger" id="btn-mute" onclick="toggleMute()" disabled>كتم</button>
-        </div>
-
-        <div class="grid-stats">
-            <div class="stat-box">
-                <div class="stat-label">حالة الصوت</div>
-                <div class="stat-value" id="stat-vad">معطل</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-label">المتصلون المباشرون</div>
-                <div class="stat-value" id="stat-peers">0</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-label">السيرفرات النشطة</div>
-                <div class="stat-value" id="stat-relays">0/3</div>
-            </div>
+        <h2>الهوية والشبكة</h2>
+        <div class="status-bar">
+            <span id="my-id">Peer ID: جاري الإنشاء...</span>
+            <span id="relay-status" class="badge">Nostr: جاري الاتصال...</span>
         </div>
     </div>
 
-    <!-- Post Creation -->
+    <!-- Realtime P2P Voice Room -->
     <div class="card">
-        <h2>منشور جديد</h2>
-        <textarea id="post-text" placeholder="اكتب للشبكة بدون وسيط..."></textarea>
-        <button class="btn" style="margin-top: 8px;" onclick="publishPost()">نشر فوري</button>
+        <h2>الغرفة الصوتية المباشرة (PeerJS Mesh)</h2>
+        <input type="text" id="room-input" placeholder="اسم الغرفة" value="pulse-main-room" />
+        <div style="display: flex; gap: 10px;">
+            <button class="btn" id="btn-join" onclick="toggleRoom()">دخول الغرفة</button>
+            <button class="btn btn-danger" id="btn-mute" onclick="toggleMute()" disabled>كتم المايك</button>
+        </div>
+        <div class="status-bar">
+            <span id="vad-status">الحالة: غير متصل</span>
+            <span id="peer-count" class="badge">الأشخاص في الغرفة: 0</span>
+        </div>
     </div>
 
-    <!-- Feed -->
+    <!-- Text Feed -->
+    <div class="card">
+        <h2>نشر منشور</h2>
+        <textarea id="post-input" placeholder="اكتب منشوراً فورياً..."></textarea>
+        <button class="btn" onclick="publishPost()">نشر عبر Nostr</button>
+    </div>
+
     <div class="card">
         <h2>التغذية المباشرة</h2>
-        <div class="feed-container" id="feed-list"></div>
+        <div id="feed-container"></div>
     </div>
 </div>
 
-<!-- Container for dynamic audio rendering -->
-<div id="remote-audio-container"></div>
+<!-- Container for remote audio elements -->
+<div id="audio-container" style="display:none;"></div>
 
 <script>
-    const APP_TAG = "pulse-prod-v2";
-    const RELAYS = [
-        "wss://relay.damus.io",
-        "wss://nos.lol",
-        "wss://relay.nostr.band"
-    ];
+    const APP_TAG = "pulse-v3-demo";
+    const NOSTR_RELAY = "wss://relay.damus.io";
 
-    const ICE_SERVERS = [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:stun2.l.google.com:19302" }
-    ];
-
-    let sk, pk;
-    let sockets = [];
-    let activeRelayCount = 0;
+    let peer = null;
     let localStream = null;
+    let myPeerId = "";
+    let currentRoom = "";
     let inRoom = false;
     let isMuted = false;
-    let currentRoom = "";
-    let heartbeatTimer = null;
 
-    // Map<remotePk, { pc: RTCPeerConnection, audioEl: HTMLAudioElement }>
-    const peers = new Map();
-    const processedEvents = new Set();
+    let activeCalls = new Map(); // peerId -> call
+    let roomPeers = new Set();
+    
+    let sk, pk, ws;
 
-    // 1. Core Initialization
+    // 1. Initialize Nostr & PeerJS
     async function init() {
-        sk = localStorage.getItem('nostr_sk_v2') || NostrTools.generatePrivateKey();
-        localStorage.setItem('nostr_sk_v2', sk);
+        // Nostr Setup
+        sk = localStorage.getItem('nostr_sk_v3') || NostrTools.generatePrivateKey();
+        localStorage.setItem('nostr_sk_v3', sk);
         pk = NostrTools.getPublicKey(sk);
 
-        document.getElementById('pubkey-display').innerText = `المفتاح العام: ${pk.substring(0, 16)}...`;
+        ws = new WebSocket(NOSTR_RELAY);
+        ws.onopen = () => {
+            document.getElementById('relay-status').innerText = "Nostr: متصل";
+            document.getElementById('relay-status').classList.add('active');
+            subscribeFeed();
+        };
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if (data[0] === "EVENT" && data[2].kind === 1) {
+                renderPost(data[2]);
+            }
+        };
 
-        connectRelays();
+        // PeerJS Setup
+        initPeerJS();
     }
 
-    function connectRelays() {
-        RELAYS.forEach(url => {
-            const ws = new WebSocket(url);
-            
-            ws.onopen = () => {
-                activeRelayCount++;
-                updateRelayUI();
-                subscribeFeed(ws);
-                if (inRoom) subscribeRoom(ws);
-            };
+    function initPeerJS() {
+        // Random short ID for user
+        myPeerId = "pulse-" + Math.random().toString(36).substring(2, 9);
+        peer = new Peer(myPeerId, {
+            debug: 1,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            }
+        });
 
-            ws.onclose = () => {
-                activeRelayCount = Math.max(0, activeRelayCount - 1);
-                updateRelayUI();
-            };
+        peer.on('open', (id) => {
+            document.getElementById('my-id').innerText = `المعرف الصوتي: ${id}`;
+        });
 
-            ws.onerror = () => {};
-
-            ws.onmessage = (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    if (data[0] === "EVENT") {
-                        const evt = data[2];
-                        if (processedEvents.has(evt.id)) return;
-                        processedEvents.add(evt.id);
-
-                        if (evt.kind === 1) renderPost(evt);
-                        if (evt.kind === 20000 && inRoom) handleSignaling(evt);
-                    }
-                } catch(err) {}
-            };
-
-            sockets.push(ws);
+        // Handle incoming audio calls
+        peer.on('call', (call) => {
+            if (!inRoom) return;
+            call.answer(localStream);
+            handleCallEvents(call);
         });
     }
 
-    function updateRelayUI() {
-        document.getElementById('stat-relays').innerText = `${activeRelayCount}/${RELAYS.length}`;
-        const badge = document.getElementById('net-status');
-        if (activeRelayCount > 0) {
-            badge.innerText = "الشبكة نشطة";
-            badge.style.color = "var(--success)";
-        } else {
-            badge.innerText = "منقطع";
-            badge.style.color = "var(--danger)";
-        }
-    }
-
-    function broadcast(evt) {
-        evt.id = NostrTools.getEventHash(evt);
-        evt.sig = NostrTools.signEvent(evt, sk);
-        const payload = JSON.stringify(["EVENT", evt]);
-        sockets.forEach(ws => {
-            if (ws.readyState === WebSocket.OPEN) ws.send(payload);
-        });
-    }
-
-    // 2. Feed Management
-    function subscribeFeed(ws) {
-        ws.send(JSON.stringify([
-            "REQ", "feed_" + Math.random(),
-            { kinds: [1], "#t": [APP_TAG], limit: 20 }
-        ]));
-    }
-
-    function publishPost() {
-        const input = document.getElementById('post-text');
-        const text = input.value.trim();
-        if (!text) return;
-
-        broadcast({
-            kind: 1,
-            pubkey: pk,
-            created_at: Math.floor(Date.now() / 1000),
-            tags: [["t", APP_TAG]],
-            content: text
-        });
-
-        input.value = "";
-    }
-
-    function renderPost(evt) {
-        const container = document.getElementById('feed-list');
-        const card = document.createElement('div');
-        card.className = 'post-card';
-        card.innerHTML = `
-            <div class="post-header">
-                <span>${evt.pubkey.substring(0, 10)}...</span>
-                <span>${new Date(evt.created_at * 1000).toLocaleTimeString('ar-EG')}</span>
-            </div>
-            <div class="post-body">${escapeHtml(evt.content)}</div>
-        `;
-        container.prepend(card);
-    }
-
-    // 3. Audio & WebRTC Logic
+    // 2. Audio Room Management
     async function toggleRoom() {
-        const btn = document.getElementById('btn-room');
-        const roomInput = document.getElementById('room-id');
+        const btn = document.getElementById('btn-join');
+        const roomInput = document.getElementById('room-input');
 
         if (!inRoom) {
-            currentRoom = roomInput.value.trim().toLowerCase() || "main-room";
-            
+            currentRoom = roomInput.value.trim().toLowerCase() || "pulse-main-room";
+
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    }
+                    audio: { echoCancellation: true, noiseSuppression: true }
                 });
-            } catch(e) {
-                alert("تعذر الوصول إلى المايكروفون!");
+            } catch (e) {
+                alert("تعذر الوصول للمايكروفون");
                 return;
             }
 
-            setupVAD();
             inRoom = true;
-            btn.innerText = "مغادرة";
+            btn.innerText = "مغادرة الغرفة";
             btn.classList.add("btn-danger");
             roomInput.disabled = true;
             document.getElementById('btn-mute').disabled = false;
 
-            // Subscribe on all active relays
-            sockets.forEach(ws => {
-                if (ws.readyState === WebSocket.OPEN) subscribeRoom(ws);
-            });
-
-            // Send Join Signal
-            sendSignal({ type: "join" });
-
-            // Light Heartbeat (15s instead of 4s to prevent rate limits)
-            heartbeatTimer = setInterval(() => {
-                if (inRoom) sendSignal({ type: "ping" });
-            }, 15000);
+            // Connect to Room Broker via DataConnection
+            announcePresence();
+            setupVAD();
 
         } else {
             leaveRoom();
@@ -347,29 +184,87 @@
 
     function leaveRoom() {
         inRoom = false;
-        const btn = document.getElementById('btn-room');
+        const btn = document.getElementById('btn-join');
         btn.innerText = "دخول الغرفة";
         btn.classList.remove("btn-danger");
-        document.getElementById('room-id').disabled = false;
+        document.getElementById('room-input').disabled = false;
         document.getElementById('btn-mute').disabled = true;
-        document.getElementById('stat-vad').innerText = "معطل";
 
-        if (heartbeatTimer) clearInterval(heartbeatTimer);
         if (localStream) localStream.getTracks().forEach(t => t.stop());
-
-        peers.forEach(peer => closePeer(peer));
-        peers.clear();
-        document.getElementById('remote-audio-container').innerHTML = "";
-        updatePeersUI();
+        
+        activeCalls.forEach(call => call.close());
+        activeCalls.clear();
+        document.getElementById('audio-container').innerHTML = "";
+        document.getElementById('peer-count').innerText = "الأشخاص في الغرفة: 0";
+        document.getElementById('vad-status').innerText = "الحالة: غير متصل";
     }
 
     function toggleMute() {
         isMuted = !isMuted;
-        if (localStream) {
-            localStream.getAudioTracks()[0].enabled = !isMuted;
+        if (localStream) localStream.getAudioTracks()[0].enabled = !isMuted;
+        document.getElementById('btn-mute').innerText = isMuted ? "إلغاء الكتم" : "كتم المايك";
+    }
+
+    // 3. Signaling via Nostr for Peer Discovery
+    function announcePresence() {
+        if (!inRoom) return;
+
+        // Broadcast presence via Nostr so other peers know we joined
+        const evt = {
+            kind: 20000,
+            pubkey: pk,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [["t", APP_TAG + "-" + currentRoom]],
+            content: JSON.stringify({ peerId: myPeerId, action: "join" })
+        };
+        evt.id = NostrTools.getEventHash(evt);
+        evt.sig = NostrTools.signEvent(evt, sk);
+        ws.send(JSON.stringify(["EVENT", evt]));
+
+        // Listen for other peers joining this room
+        ws.send(JSON.stringify([
+            "REQ", "room_discovery",
+            { kinds: [20000], "#t": [APP_TAG + "-" + currentRoom], limit: 10 }
+        ]));
+    }
+
+    // Handle Nostr discovery messages
+    function handleRoomDiscovery(data) {
+        if (data.peerId === myPeerId || !inRoom) return;
+
+        const targetPeerId = data.peerId;
+        if (!activeCalls.has(targetPeerId)) {
+            // Call the discovered peer
+            const call = peer.call(targetPeerId, localStream);
+            handleCallEvents(call);
         }
-        document.getElementById('btn-mute').innerText = isMuted ? "تشغيل" : "كتم";
-        document.getElementById('stat-vad').innerText = isMuted ? "مكتوم" : "نشط";
+    }
+
+    function handleCallEvents(call) {
+        activeCalls.set(call.peer, call);
+
+        call.on('stream', (remoteStream) => {
+            let audio = document.getElementById("audio-" + call.peer);
+            if (!audio) {
+                audio = document.createElement('audio');
+                audio.id = "audio-" + call.peer;
+                audio.autoplay = true;
+                document.getElementById('audio-container').appendChild(audio);
+            }
+            audio.srcObject = remoteStream;
+            updatePeerCount();
+        });
+
+        call.on('close', () => {
+            const audio = document.getElementById("audio-" + call.peer);
+            if (audio) audio.remove();
+            activeCalls.delete(call.peer);
+            updatePeerCount();
+        });
+    }
+
+    function updatePeerCount() {
+        document.getElementById('peer-count').innerText = `الأشخاص في الغرفة: ${activeCalls.size}`;
     }
 
     function setupVAD() {
@@ -380,138 +275,59 @@
         source.connect(analyser);
 
         const data = new Uint8Array(analyser.frequencyBinCount);
-        const vadUI = document.getElementById('stat-vad');
-
         setInterval(() => {
             if (!inRoom || isMuted) return;
             analyser.getByteFrequencyData(data);
-            const volume = data.reduce((a, b) => a + b, 0) / data.length;
-            
-            if (volume > 10) {
-                vadUI.innerText = "يتحدث...";
-                vadUI.style.color = "var(--success)";
-            } else {
-                vadUI.innerText = "صامت";
-                vadUI.style.color = "var(--text-muted)";
-            }
+            const vol = data.reduce((a, b) => a + b, 0) / data.length;
+            document.getElementById('vad-status').innerText = vol > 10 ? "الحالة: تتحدث الآن 🎙️" : "الحالة: متصل (صامت)";
         }, 300);
     }
 
-    function subscribeRoom(ws) {
+    // 4. Nostr Feed System
+    function subscribeFeed() {
         ws.send(JSON.stringify([
-            "REQ", "room_" + Math.random(),
-            { kinds: [20000], "#t": [getRoomTag()], limit: 10 }
+            "REQ", "feed_sub",
+            { kinds: [1], "#t": [APP_TAG], limit: 20 }
         ]));
     }
 
-    function getRoomTag() {
-        return `${APP_TAG}-room-${currentRoom}`;
-    }
+    function publishPost() {
+        const input = document.getElementById('post-input');
+        const text = input.value.trim();
+        if (!text) return;
 
-    function sendSignal(payload, targetPk = null) {
-        broadcast({
-            kind: 20000,
+        const evt = {
+            kind: 1,
             pubkey: pk,
             created_at: Math.floor(Date.now() / 1000),
-            tags: [["t", getRoomTag()]],
-            content: JSON.stringify({ ...payload, target: targetPk })
-        });
+            tags: [["t", APP_TAG]],
+            content: text
+        };
+        evt.id = NostrTools.getEventHash(evt);
+        evt.sig = NostrTools.signEvent(evt, sk);
+
+        ws.send(JSON.stringify(["EVENT", evt]));
+        input.value = "";
     }
 
-    async function handleSignaling(evt) {
-        if (evt.pubkey === pk) return;
-
-        let data;
-        try { data = JSON.parse(evt.content); } catch(e) { return; }
-        if (data.target && data.target !== pk) return;
-
-        const remotePk = evt.pubkey;
-
-        if (data.type === "join" || data.type === "ping") {
-            if (!peers.has(remotePk)) {
-                createPeerConnection(remotePk, true);
-            }
-        } else if (data.type === "offer") {
-            const peer = createPeerConnection(remotePk, false);
-            await peer.pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-            const answer = await peer.pc.createAnswer();
-            await peer.pc.setLocalDescription(answer);
-            sendSignal({ type: "answer", answer }, remotePk);
-        } else if (data.type === "answer") {
-            const peer = peers.get(remotePk);
-            if (peer) await peer.pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-        } else if (data.type === "candidate") {
-            const peer = peers.get(remotePk);
-            if (peer && data.candidate) {
-                try { await peer.pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch(e) {}
-            }
-        }
-    }
-
-    function createPeerConnection(remotePk, isInitiator) {
-        if (peers.has(remotePk)) return peers.get(remotePk);
-
-        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-        
-        // Dynamic Audio Element for remote peer
-        const audioEl = document.createElement('audio');
-        audioEl.autoplay = true;
-        audioEl.playsInline = true;
-        document.getElementById('remote-audio-container').appendChild(audioEl);
-
-        const peerObj = { pc, audioEl };
-        peers.set(remotePk, peerObj);
-
-        // Add Local Audio Tracks
-        if (localStream) {
-            localStream.getAudioTracks().forEach(track => pc.addTrack(track, localStream));
+    const seenEvents = new Set();
+    function renderPost(evt) {
+        if (evt.kind === 20000) {
+            try { handleRoomDiscovery(JSON.parse(evt.content)); } catch(e){}
+            return;
         }
 
-        // Receive Remote Audio Tracks
-        pc.ontrack = (event) => {
-            if (event.streams && event.streams[0]) {
-                audioEl.srcObject = event.streams[0];
-            }
-        };
+        if (seenEvents.has(evt.id)) return;
+        seenEvents.add(evt.id);
 
-        // ICE Candidates
-        pc.onicecandidate = (event) => {
-            if (event.candidate) {
-                sendSignal({ type: "candidate", candidate: event.candidate }, remotePk);
-            }
-        };
-
-        pc.onconnectionstatechange = () => {
-            if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-                closePeer(peerObj);
-                peers.delete(remotePk);
-                updatePeersUI();
-            }
-        };
-
-        if (isInitiator) {
-            pc.onnegotiationneeded = async () => {
-                try {
-                    const offer = await pc.createOffer();
-                    await pc.setLocalDescription(offer);
-                    sendSignal({ type: "offer", offer }, remotePk);
-                } catch(e) {}
-            };
-        }
-
-        updatePeersUI();
-        return peerObj;
-    }
-
-    function closePeer(peerObj) {
-        try {
-            peerObj.pc.close();
-            if (peerObj.audioEl) peerObj.audioEl.remove();
-        } catch(e) {}
-    }
-
-    function updatePeersUI() {
-        document.getElementById('stat-peers').innerText = peers.size;
+        const container = document.getElementById('feed-container');
+        const div = document.createElement('div');
+        div.className = 'feed-item';
+        div.innerHTML = `
+            <div class="feed-header">${evt.pubkey.substring(0, 8)}... • ${new Date(evt.created_at * 1000).toLocaleTimeString('ar-EG')}</div>
+            <div>${escapeHtml(evt.content)}</div>
+        `;
+        container.prepend(div);
     }
 
     function escapeHtml(str) {
