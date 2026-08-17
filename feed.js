@@ -1,6 +1,6 @@
 // feed.js — نشر منشور وقراءة الفيد عبر relays مجانية عامة
-import { finalizeEvent, SimplePool } from 'nostr-tools';
-import { useWebSocketImplementation } from 'nostr-tools/pool';
+import { finalizeEvent } from 'nostr-tools';
+import { SimplePool, useWebSocketImplementation } from 'nostr-tools/pool';
 import WebSocket from 'ws';
 
 useWebSocketImplementation(WebSocket);
