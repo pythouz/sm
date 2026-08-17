@@ -67,7 +67,7 @@
 <div id="audio-container" style="display:none;"></div>
 
 <script>
-    const APP_TAG = "pulse-v6-studio";
+    const APP_TAG = "pulse-v7-bg-audio";
     const NOSTR_RELAY = "wss://relay.damus.io";
 
     let peer = null;
@@ -78,17 +78,17 @@
     let isMuted = false;
     let activeCalls = new Map();
     let audioCtx = null;
-    let backgroundOscillator = null;
+    let silentAudioEl = null;
     let sk, pk, ws;
 
-    // SDP Munger: Force Opus 64kbps HD Mono (Discord standard for clear voice with 0 echo)
+    // SDP Munger: Force Opus 64kbps HD Mono (Discord/Clubhouse quality with echo cancellation)
     function forceVoiceQualitySDP(sdp) {
         return sdp.replace(/a=fmtp:111 .*/g, 'a=fmtp:111 minptime=10;useinbandfec=1;usedtx=1;maxaveragebitrate=64000');
     }
 
     async function init() {
-        sk = localStorage.getItem('nostr_sk_v6') || NostrTools.generatePrivateKey();
-        localStorage.setItem('nostr_sk_v6', sk);
+        sk = localStorage.getItem('nostr_sk_v7') || NostrTools.generatePrivateKey();
+        localStorage.setItem('nostr_sk_v7', sk);
         pk = NostrTools.getPublicKey(sk);
 
         ws = new WebSocket(NOSTR_RELAY);
@@ -141,7 +141,6 @@
             currentRoom = roomInput.value.trim().toLowerCase() || "pulse-main-room";
 
             try {
-                // Radio Quality Voice Constraints (No Echo, Crisp Studio Voice)
                 localStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
                         echoCancellation: true,
@@ -156,7 +155,6 @@
                 return;
             }
 
-            // Keep alive engine for background/power-button lock
             startBackgroundAudioEngine();
 
             inRoom = true;
@@ -174,26 +172,25 @@
     }
 
     function startBackgroundAudioEngine() {
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
+        if (!silentAudioEl) {
+            silentAudioEl = document.createElement('audio');
+            silentAudioEl.id = 'keep-alive-stream';
+            silentAudioEl.loop = true;
+            silentAudioEl.playsInline = true;
+            silentAudioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+            document.body.appendChild(silentAudioEl);
+        }
 
-        // Silent WebAudio oscillator prevents OS from sleeping WebRTC on physical power button lock
-        try {
-            backgroundOscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            gainNode.gain.value = 0.0001; // Inaudible keep-alive signal
-            backgroundOscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            backgroundOscillator.start();
-        } catch(e) {}
+        silentAudioEl.play().catch(() => {});
 
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: "Pulse Voice Studio",
-                artist: "متصل الآن (Background Active)",
-                album: "Pulse Live"
+                artist: "المكالمة مستمرة في الخلفية",
+                album: "Pulse Studio"
             });
-            navigator.mediaSession.setActionHandler('play', () => {});
+            navigator.mediaSession.playbackState = "playing";
+            navigator.mediaSession.setActionHandler('play', () => silentAudioEl && silentAudioEl.play());
             navigator.mediaSession.setActionHandler('pause', () => {});
         }
     }
@@ -207,9 +204,10 @@
         document.getElementById('room-input').disabled = false;
         document.getElementById('btn-mute').disabled = true;
 
-        if (backgroundOscillator) {
-            try { backgroundOscillator.stop(); } catch(e){}
-            backgroundOscillator = null;
+        if (silentAudioEl) {
+            silentAudioEl.pause();
+            silentAudioEl.remove();
+            silentAudioEl = null;
         }
 
         if (localStream) localStream.getTracks().forEach(t => t.stop());
