@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pulse - Nostr P2P Platform</title>
-    <!-- Nostr Library -->
     <script src="https://unpkg.com/nostr-tools@1.17.0/lib/nostr.bundle.js"></script>
     <style>
         :root {
@@ -43,17 +42,18 @@
 
         h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
 
-        textarea {
+        textarea, input[type="text"] {
             width: 100%;
-            height: 80px;
             background: #090d16;
             border: 1px solid var(--border);
             border-radius: 8px;
             color: var(--text);
             padding: 10px;
             box-sizing: border-box;
-            resize: none;
         }
+
+        textarea { height: 80px; resize: none; }
+        input[type="text"] { height: 40px; margin-bottom: 8px; }
 
         button {
             background-color: var(--accent);
@@ -79,6 +79,7 @@
 
         .audio-status {
             display: flex;
+            flex-wrap: wrap;
             align-items: center;
             gap: 10px;
             margin-top: 10px;
@@ -104,14 +105,12 @@
         <div class="author" id="relay-status">جاري الاتصال بالـ Relay...</div>
     </div>
 
-    <!-- Audio Room (P2P Cascade) -->
+    <!-- Audio Room (Dynamic Name + Cascade P2P) -->
     <div class="card">
-        <h2>الغرفة الصوتية (P2P Cascade)</h2>
-        <p style="font-size: 0.85rem; color: var(--text-muted);">
-            تعتمد على توزيع البث شجرياً بين المتصفحات مباشرة وتوقف الصوت تلقائياً عند الصمت لتوفير الموارد.
-        </p>
+        <h2>الغرفة الصوتية (Dynamic P2P Room)</h2>
+        <input type="text" id="room-name-input" placeholder="ادخل اسم الغرفة (مثال: main-room)" value="general" />
         <div class="audio-status">
-            <button id="btn-join-room" onclick="toggleAudioRoom()">دخول الغرفة الصوتية</button>
+            <button id="btn-join-room" onclick="toggleAudioRoom()">دخول الغرفة</button>
             <button id="btn-mute" onclick="toggleMute()" disabled>كتم المايك</button>
             <span id="vad-indicator" class="badge">صامت</span>
             <span id="peers-count" class="badge">المتصلون المباشرون: 0</span>
@@ -142,6 +141,8 @@
     let localStream = null;
     let inRoom = false;
     let isMuted = false;
+    let currentRoomName = "";
+    let heartbeatInterval = null;
     let peerConnections = new Map(); // Remote PubKey -> RTCPeerConnection
     let childrenKeys = new Set();
 
@@ -158,11 +159,24 @@
 
         document.getElementById('my-pubkey').innerText = `المفتاح العام: ${pk.substring(0, 12)}...`;
 
+        // Check if room name is in URL Hash (Auto Rejoin on Refresh)
+        if (window.location.hash) {
+            const hashRoom = window.location.hash.replace("#", "").trim();
+            if (hashRoom) {
+                document.getElementById('room-name-input').value = hashRoom;
+            }
+        }
+
         ws = new WebSocket(RELAY_URL);
 
         ws.onopen = () => {
             document.getElementById('relay-status').innerText = `متصل بالشبكة: ${RELAY_URL}`;
             subscribeFeed();
+            
+            // Auto rejoin if hash existed
+            if (window.location.hash) {
+                toggleAudioRoom();
+            }
         };
 
         ws.onmessage = (e) => {
@@ -178,11 +192,10 @@
         };
     }
 
-    // 2. Feed Management (Filtered by APP_TAG)
+    // 2. Feed Management
     function subscribeFeed() {
-        const subId = "feed_sub";
         const req = JSON.stringify([
-            "REQ", subId,
+            "REQ", "feed_sub",
             { kinds: [1], "#t": [APP_TAG], limit: 20 }
         ]);
         ws.send(req);
@@ -253,23 +266,41 @@
         }, 200);
     }
 
-    // 4. Audio Room & Cascade P2P
+    // 4. Dynamic Audio Room & Peer Cascade
     async function toggleAudioRoom() {
         const btn = document.getElementById('btn-join-room');
+        const roomInput = document.getElementById('room-name-input');
+        
         if (!inRoom) {
+            currentRoomName = roomInput.value.trim().toLowerCase() || "general";
+            window.location.hash = currentRoomName;
+
             await setupAudioWithVAD();
             inRoom = true;
             btn.innerText = "مغادرة الغرفة";
+            roomInput.disabled = true;
             document.getElementById('btn-mute').disabled = false;
-            sendSignal({ type: "join" });
+
             subscribeRoomSignals();
+            
+            // Heartbeat: Announce presence every 4 seconds
+            sendSignal({ type: "presence" });
+            heartbeatInterval = setInterval(() => {
+                if (inRoom) sendSignal({ type: "presence" });
+            }, 4000);
+
         } else {
             inRoom = false;
-            btn.innerText = "دخول الغرفة الصوتية";
+            btn.innerText = "دخول الغرفة";
+            roomInput.disabled = false;
             document.getElementById('btn-mute').disabled = true;
+            window.location.hash = "";
+
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
             if (localStream) localStream.getTracks().forEach(t => t.stop());
             peerConnections.forEach(pc => pc.close());
             peerConnections.clear();
+            childrenKeys.clear();
             updatePeerCount();
         }
     }
@@ -280,10 +311,14 @@
         document.getElementById('btn-mute').innerText = isMuted ? "إلغاء الكتم" : "كتم المايك";
     }
 
+    function getRoomTag() {
+        return `${APP_TAG}-room-${currentRoomName}`;
+    }
+
     function subscribeRoomSignals() {
         ws.send(JSON.stringify([
             "REQ", "room_sub",
-            { kinds: [20000], "#t": [APP_TAG + "-room"], limit: 10 }
+            { kinds: [20000], "#t": [getRoomTag()], limit: 15 }
         ]));
     }
 
@@ -292,7 +327,7 @@
             kind: 20000,
             pubkey: pk,
             created_at: Math.floor(Date.now() / 1000),
-            tags: [["t", APP_TAG + "-room"]],
+            tags: [["t", getRoomTag()]],
             content: JSON.stringify({ ...payload, target: targetPk })
         };
         event.id = NostrTools.getEventHash(event);
@@ -307,8 +342,9 @@
 
         if (data.target && data.target !== pk) return;
 
-        if (data.type === "join") {
-            if (childrenKeys.size < MAX_CHILDREN) {
+        // Discovery via presence or explicit join
+        if (data.type === "presence" || data.type === "join") {
+            if (!peerConnections.has(event.pubkey) && childrenKeys.size < MAX_CHILDREN) {
                 createPeer(event.pubkey, true);
             }
         } else if (data.type === "offer") {
@@ -356,6 +392,14 @@
         pc.onicecandidate = (evt) => {
             if (evt.candidate) {
                 sendSignal({ type: "candidate", candidate: evt.candidate }, remotePk);
+            }
+        };
+
+        pc.onconnectionstatechange = () => {
+            if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+                peerConnections.delete(remotePk);
+                childrenKeys.delete(remotePk);
+                updatePeerCount();
             }
         };
 
