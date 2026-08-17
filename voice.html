@@ -24,6 +24,7 @@
 <body>
 
 <h1>🎙️ Pulse — غرفة صوتية</h1>
+<div style="margin-bottom:12px;"><a href="index.html" style="color:#5865f2;">← العودة للفيد</a></div>
 <div id="status">اكتب اسم الغرفة وادخل</div>
 <div id="identity" style="font-size:12px; color:#888; margin-bottom:10px;"></div>
 
@@ -58,8 +59,9 @@ const skBytes = hexToBytes(sk);
 const pk = getPublicKey(skBytes);
 identityEl.textContent = 'هويتك: ' + nip19.npubEncode(pk).slice(0,20) + '...';
 
-const KIND_PRESENCE = 21000; // إعلان وجود في الغرفة (ephemeral)
-const KIND_SIGNAL = 21001;   // offer/answer/candidate (ephemeral)
+// استبدال Kinds المؤقتة بأحداث مخزنة وقابلة للاستبدال
+const KIND_PRESENCE = 30078; // Parameterized Replaceable Event (يستبدل القديم لنفس المستخدم)
+const KIND_SIGNAL = 1050;    // Regular Event (يستمر حتى يتم استقبال الإشارة)
 
 let roomId = null;
 let localStream = null;
@@ -86,7 +88,10 @@ function announcePresence() {
   const event = finalizeEvent({
     kind: KIND_PRESENCE,
     created_at: Math.floor(Date.now()/1000),
-    tags: [['room', roomId]],
+    tags: [
+      ['d', `pulse-presence-${roomId}`], // ضمان استبدال إعلان الوجود القديم آلياً
+      ['room', roomId]
+    ],
     content: '',
   }, skBytes);
   publish(event);
@@ -100,6 +105,7 @@ function addPeerRow(peerPk) {
   div.innerHTML = `<span class="dot"></span> ${peerPk.slice(0,10)}...`;
   peersEl.appendChild(div);
 }
+
 function removePeerRow(peerPk) {
   document.getElementById('peer-'+peerPk)?.remove();
 }
@@ -135,7 +141,6 @@ function createPeerConnection(peerPk) {
 
 async function handlePresence(fromPk) {
   if (fromPk === pk || peerConnections.has(fromPk)) return;
-  // تحديد حتمي: صاحب المفتاح الأصغر هو اللي يبعت العرض (offer)، عشان محدش يبعت اتنين
   if (pk < fromPk) {
     const pc = createPeerConnection(fromPk);
     const offer = await pc.createOffer({ offerToReceiveAudio: true });
@@ -174,12 +179,17 @@ async function joinRoom() {
   document.getElementById('inRoomBox').style.display = 'block';
   statusEl.innerHTML = '<span class="ok">دخلت الغرفة: ' + roomId + '</span>';
 
+  const now = Math.floor(Date.now()/1000);
+
+  // جلب آخر حالة وجود أُعلنت خلال آخر دقيقتين
   const presenceSub = pool.subscribeMany(RELAYS,
-    { kinds:[KIND_PRESENCE], '#room':[roomId], since: Math.floor(Date.now()/1000) - 10 },
+    { kinds:[KIND_PRESENCE], '#room':[roomId], since: now - 120 },
     { onevent(event) { handlePresence(event.pubkey); } }
   );
+
+  // جلب الإشارات الخاصة بك فقط والواردة خلال دقيقة
   const signalSub = pool.subscribeMany(RELAYS,
-    { kinds:[KIND_SIGNAL], '#p':[pk], '#room':[roomId], since: Math.floor(Date.now()/1000) - 10 },
+    { kinds:[KIND_SIGNAL], '#p':[pk], '#room':[roomId], since: now - 60 },
     { onevent(event) {
         const key = event.id;
         if (seenSignals.has(key)) return;
@@ -191,7 +201,7 @@ async function joinRoom() {
   sub = { close(){ presenceSub.close(); signalSub.close(); } };
 
   announcePresence();
-  presenceTimer = setInterval(announcePresence, 4000);
+  presenceTimer = setInterval(announcePresence, 5000);
 }
 
 function leaveRoom() {
