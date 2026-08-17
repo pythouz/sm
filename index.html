@@ -63,6 +63,19 @@ const pk = getPublicKey(skBytes);
 identityEl.textContent = 'هويتك: ' + nip19.npubEncode(pk);
 
 const posts = new Map(); // id -> {event, likes:Set, replies:[]}
+const orphanReactions = []; // {targetId, type:'like'|'reply', event}
+const seenEventIds = new Set();
+
+function attachOrphans(postId) {
+  for (let i = orphanReactions.length - 1; i >= 0; i--) {
+    const o = orphanReactions[i];
+    if (o.targetId !== postId) continue;
+    const p = posts.get(postId);
+    if (o.type === 'like') p.likes.add(o.event.pubkey);
+    else p.replies.push(o.event);
+    orphanReactions.splice(i, 1);
+  }
+}
 
 function render() {
   feedEl.innerHTML = '';
@@ -118,6 +131,7 @@ document.getElementById('postBtn').onclick = async () => {
   const content = input.value.trim();
   if (!content) return;
   const event = finalizeEvent({ kind:1, created_at:Math.floor(Date.now()/1000), tags:[], content }, skBytes);
+  seenEventIds.add(event.id);
   ensurePost(event);
   render();
   input.value = '';
@@ -126,6 +140,7 @@ document.getElementById('postBtn').onclick = async () => {
 
 async function doLike(target) {
   const event = finalizeEvent({ kind:7, created_at:Math.floor(Date.now()/1000), tags:[['e',target.id],['p',target.pubkey]], content:'+' }, skBytes);
+  seenEventIds.add(event.id);
   posts.get(target.id).likes.add(pk);
   render();
   await publish(event);
@@ -133,6 +148,7 @@ async function doLike(target) {
 
 async function doReply(target, content) {
   const event = finalizeEvent({ kind:1, created_at:Math.floor(Date.now()/1000), tags:[['e',target.id,'','reply'],['p',target.pubkey]], content }, skBytes);
+  seenEventIds.add(event.id);
   posts.get(target.id).replies.push(event);
   render();
   await publish(event);
@@ -141,22 +157,28 @@ async function doReply(target, content) {
 // الاستماع لمنشوراتك انت بس (مش كل شبكة Nostr العامة)
 pool.subscribeMany(RELAYS, { kinds:[1,7], authors:[pk], limit:50 }, {
   onevent(event) {
+    if (seenEventIds.has(event.id)) return;
+    seenEventIds.add(event.id);
+
     if (event.kind === 1) {
       const replyTag = event.tags.find(t => t[0]==='e');
       if (replyTag) {
         const parent = posts.get(replyTag[1]);
-        if (parent) { parent.replies.push(event); render(); }
+        if (parent) { parent.replies.push(event); }
+        else { orphanReactions.push({ targetId: replyTag[1], type:'reply', event }); }
       } else {
         ensurePost(event);
-        render();
+        attachOrphans(event.id);
       }
     } else if (event.kind === 7) {
       const eTag = event.tags.find(t => t[0]==='e');
       if (eTag) {
         const parent = posts.get(eTag[1]);
-        if (parent) { parent.likes.add(event.pubkey); render(); }
+        if (parent) { parent.likes.add(event.pubkey); }
+        else { orphanReactions.push({ targetId: eTag[1], type:'like', event }); }
       }
     }
+    render();
   },
   oneose() {
     statusEl.innerHTML = '<span class="ok">متصل ✓ — بيستقبل المنشورات لحظياً</span>';
