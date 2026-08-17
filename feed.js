@@ -25,6 +25,10 @@ export async function publishPost(sk, content) {
   );
 
   const results = await Promise.allSettled(pool.publish(RELAYS, event));
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') console.log(`  ✗ ${RELAYS[i]}: ${r.reason}`);
+    else console.log(`  ✓ ${RELAYS[i]}`);
+  });
   const ok = results.filter(r => r.status === 'fulfilled').length;
   console.log(`تم النشر على ${ok}/${RELAYS.length} relay`);
   console.log('معرّف المنشور:', event.id);
