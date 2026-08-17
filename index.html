@@ -137,8 +137,8 @@ async function doReply(target, content) {
   await publish(event);
 }
 
-// الاستماع للشبكة: منشورات جديدة، لايكات، ردود
-pool.subscribeMany(RELAYS, { kinds:[1,7], since: Math.floor(Date.now()/1000) - 3600, limit:100 }, {
+// الاستماع لمنشوراتك انت بس (مش كل شبكة Nostr العامة)
+pool.subscribeMany(RELAYS, { kinds:[1,7], authors:[pk], limit:50 }, {
   onevent(event) {
     if (event.kind === 1) {
       const replyTag = event.tags.find(t => t[0]==='e');
