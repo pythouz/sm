@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pulse - Radio Quality P2P</title>
+    <title>Pulse - Voice Studio</title>
     <script src="https://unpkg.com/nostr-tools@1.17.0/lib/nostr.bundle.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
@@ -12,7 +12,6 @@
             --card: #151d2a;
             --border: #232d3f;
             --accent: #4f46e5;
-            --success: #10b981;
             --danger: #ef4444;
             --text: #f3f4f6;
             --muted: #9ca3af;
@@ -33,7 +32,6 @@
 
         .status-bar { font-size: 0.85rem; color: var(--muted); margin-top: 8px; display: flex; justify-content: space-between; align-items: center; }
         .badge { background: var(--border); padding: 3px 8px; border-radius: 6px; font-size: 0.8rem; }
-        .badge.active { background: var(--success); color: black; }
 
         .feed-item { border-bottom: 1px solid var(--border); padding: 10px 0; }
         .feed-item:last-child { border-bottom: none; }
@@ -67,7 +65,7 @@
 <div id="audio-container" style="display:none;"></div>
 
 <script>
-    const APP_TAG = "pulse-v7-bg-audio";
+    const APP_TAG = "pulse-v8-bg-audio";
     const NOSTR_RELAY = "wss://relay.damus.io";
 
     let peer = null;
@@ -77,18 +75,40 @@
     let inRoom = false;
     let isMuted = false;
     let activeCalls = new Map();
+    
     let audioCtx = null;
+    let bgAudioCtx = null;
     let silentAudioEl = null;
     let sk, pk, ws;
 
-    // SDP Munger: Force Opus 64kbps HD Mono (Discord/Clubhouse quality with echo cancellation)
-    function forceVoiceQualitySDP(sdp) {
-        return sdp.replace(/a=fmtp:111 .*/g, 'a=fmtp:111 minptime=10;useinbandfec=1;usedtx=1;maxaveragebitrate=64000');
+    function getPrivateKey() {
+        let saved = localStorage.getItem('nostr_sk_v8');
+        if (saved) return saved;
+
+        let skHex = "";
+        try {
+            if (typeof NostrTools !== 'undefined') {
+                if (typeof NostrTools.generatePrivateKey === 'function') {
+                    skHex = NostrTools.generatePrivateKey();
+                } else if (typeof NostrTools.generateSecretKey === 'function') {
+                    const bytes = NostrTools.generateSecretKey();
+                    skHex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                }
+            }
+        } catch(e) {}
+
+        if (!skHex) {
+            const array = new Uint8Array(32);
+            crypto.getRandomValues(array);
+            skHex = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        localStorage.setItem('nostr_sk_v8', skHex);
+        return skHex;
     }
 
     async function init() {
-        sk = localStorage.getItem('nostr_sk_v7') || NostrTools.generatePrivateKey();
-        localStorage.setItem('nostr_sk_v7', sk);
+        sk = getPrivateKey();
         pk = NostrTools.getPublicKey(sk);
 
         ws = new WebSocket(NOSTR_RELAY);
@@ -97,17 +117,20 @@
             const savedRoom = sessionStorage.getItem('active_voice_room');
             if (savedRoom) {
                 document.getElementById('room-input').value = savedRoom;
-                toggleRoom();
             }
         };
 
+        ws.onerror = (err) => console.log("WebSocket Error:", err);
+
         ws.onmessage = (e) => {
-            const data = JSON.parse(e.data);
-            if (data[0] === "EVENT" && data[2].kind === 1) {
-                renderPost(data[2]);
-            } else if (data[0] === "EVENT" && data[2].kind === 20000) {
-                try { handleRoomDiscovery(JSON.parse(data[2].content)); } catch(err){}
-            }
+            try {
+                const data = JSON.parse(e.data);
+                if (data[0] === "EVENT" && data[2].kind === 1) {
+                    renderPost(data[2]);
+                } else if (data[0] === "EVENT" && data[2].kind === 20000) {
+                    handleRoomDiscovery(JSON.parse(data[2].content));
+                }
+            } catch(err){}
         };
 
         initPeerJS();
@@ -119,16 +142,14 @@
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelay', credential: 'openrelay' },
-                    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelay', credential: 'openrelay' }
+                    { urls: 'stun:stun1.l.google.com:19302' }
                 ]
             }
         });
 
         peer.on('call', (call) => {
             if (!inRoom) return;
-            call.answer(localStream, { sdpTransform: forceVoiceQualitySDP });
+            call.answer(localStream);
             handleCallEvents(call);
         });
     }
@@ -146,12 +167,11 @@
                         echoCancellation: true,
                         noiseSuppression: true,
                         autoGainControl: true,
-                        channelCount: 1,
-                        sampleRate: 48000
+                        channelCount: 1
                     }
                 });
             } catch (e) {
-                alert("يرجى إعطاء صلاحية المايكروفون للانضمام للغرفة");
+                alert("يرجى السماح بالوصول للمايكروفون للانضمام للغرفة");
                 return;
             }
 
@@ -171,27 +191,51 @@
         }
     }
 
+    // محرك صوت المباشر في الخلفية لتفادي إغلاق المايك عند ضغط زر الباور
     function startBackgroundAudioEngine() {
         if (!silentAudioEl) {
-            silentAudioEl = document.createElement('audio');
-            silentAudioEl.id = 'keep-alive-stream';
-            silentAudioEl.loop = true;
-            silentAudioEl.playsInline = true;
-            silentAudioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-            document.body.appendChild(silentAudioEl);
-        }
+            try {
+                bgAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = bgAudioCtx.createOscillator();
+                const gain = bgAudioCtx.createGain();
+                
+                gain.gain.value = 0.0001; // صوت شبه صامت لتفعيل جلسة الميديا
+                osc.connect(gain);
+                
+                const dst = bgAudioCtx.createMediaStreamDestination();
+                gain.connect(dst);
+                osc.start();
 
-        silentAudioEl.play().catch(() => {});
+                silentAudioEl = document.createElement('audio');
+                silentAudioEl.id = 'keep-alive-stream';
+                silentAudioEl.srcObject = dst.stream;
+                silentAudioEl.autoplay = true;
+                silentAudioEl.playsInline = true;
+                document.body.appendChild(silentAudioEl);
 
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: "Pulse Voice Studio",
-                artist: "المكالمة مستمرة في الخلفية",
-                album: "Pulse Studio"
-            });
-            navigator.mediaSession.playbackState = "playing";
-            navigator.mediaSession.setActionHandler('play', () => silentAudioEl && silentAudioEl.play());
-            navigator.mediaSession.setActionHandler('pause', () => {});
+                silentAudioEl.play().catch(() => {});
+
+                if ('mediaSession' in navigator) {
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: "Pulse Live Voice",
+                        artist: "المكالمة نشطة في الخلفية",
+                        album: "Pulse Studio"
+                    });
+                    navigator.mediaSession.playbackState = "playing";
+                    navigator.mediaSession.setActionHandler('play', () => {
+                        if (bgAudioCtx && bgAudioCtx.state === 'suspended') bgAudioCtx.resume();
+                        silentAudioEl.play();
+                    });
+                    navigator.mediaSession.setActionHandler('pause', () => {});
+                }
+            } catch (e) {
+                console.error("BG Audio Engine Error:", e);
+            }
+        } else {
+            if (bgAudioCtx && bgAudioCtx.state === 'suspended') {
+                bgAudioCtx.resume();
+            }
+            silentAudioEl.play().catch(() => {});
         }
     }
 
@@ -210,6 +254,11 @@
             silentAudioEl = null;
         }
 
+        if (bgAudioCtx) {
+            bgAudioCtx.close();
+            bgAudioCtx = null;
+        }
+
         if (localStream) localStream.getTracks().forEach(t => t.stop());
         activeCalls.forEach(call => call.close());
         activeCalls.clear();
@@ -225,7 +274,7 @@
     }
 
     function announcePresence() {
-        if (!inRoom || ws.readyState !== WebSocket.OPEN) return;
+        if (!inRoom || !ws || ws.readyState !== WebSocket.OPEN) return;
         const evt = {
             kind: 20000,
             pubkey: pk,
@@ -246,7 +295,7 @@
     function handleRoomDiscovery(data) {
         if (!inRoom || !data.peerId || data.peerId === myPeerId) return;
         if (!activeCalls.has(data.peerId)) {
-            const call = peer.call(data.peerId, localStream, { sdpTransform: forceVoiceQualitySDP });
+            const call = peer.call(data.peerId, localStream);
             if (call) handleCallEvents(call);
         }
     }
@@ -285,6 +334,8 @@
 
     function setupVAD() {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        
         const source = audioCtx.createMediaStreamSource(localStream);
         const analyser = audioCtx.createAnalyser();
         analyser.fftSize = 256;
@@ -301,6 +352,7 @@
     }
 
     function subscribeFeed() {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
         ws.send(JSON.stringify([
             "REQ", "feed_sub",
             { kinds: [1], "#t": [APP_TAG], limit: 15 }
@@ -310,7 +362,7 @@
     function publishPost() {
         const input = document.getElementById('post-input');
         const text = input.value.trim();
-        if (!text) return;
+        if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
 
         const evt = {
             kind: 1,
