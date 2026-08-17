@@ -174,21 +174,21 @@ async function joinRoom() {
   document.getElementById('inRoomBox').style.display = 'block';
   statusEl.innerHTML = '<span class="ok">دخلت الغرفة: ' + roomId + '</span>';
 
-  sub = pool.subscribeMany(RELAYS, [
+  const presenceSub = pool.subscribeMany(RELAYS,
     { kinds:[KIND_PRESENCE], '#room':[roomId], since: Math.floor(Date.now()/1000) - 10 },
+    { onevent(event) { handlePresence(event.pubkey); } }
+  );
+  const signalSub = pool.subscribeMany(RELAYS,
     { kinds:[KIND_SIGNAL], '#p':[pk], '#room':[roomId], since: Math.floor(Date.now()/1000) - 10 },
-  ], {
-    onevent(event) {
-      if (event.kind === KIND_PRESENCE) {
-        handlePresence(event.pubkey);
-      } else if (event.kind === KIND_SIGNAL) {
+    { onevent(event) {
         const key = event.id;
         if (seenSignals.has(key)) return;
         seenSignals.add(key);
         try { handleSignal(event.pubkey, JSON.parse(event.content)); } catch(e){}
       }
     }
-  });
+  );
+  sub = { close(){ presenceSub.close(); signalSub.close(); } };
 
   announcePresence();
   presenceTimer = setInterval(announcePresence, 4000);
