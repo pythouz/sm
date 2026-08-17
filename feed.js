@@ -38,7 +38,7 @@ export async function publishPost(sk, content) {
 export function subscribeFeed(pubkeys, onEvent) {
   const sub = pool.subscribeMany(
     RELAYS,
-    [{ kinds: [1], authors: pubkeys, limit: 20 }],
+    { kinds: [1], authors: pubkeys, limit: 20 },
     {
       onevent: onEvent,
       oneose: () => console.log('-- تم تحميل المنشورات القديمة، بننتظر الجديد لحظياً --'),
