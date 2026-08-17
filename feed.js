@@ -1,6 +1,9 @@
 // feed.js — نشر منشور وقراءة الفيد عبر relays مجانية عامة
 import { finalizeEvent, SimplePool } from 'nostr-tools';
-import 'websocket-polyfill';
+import { useWebSocketImplementation } from 'nostr-tools/pool';
+import WebSocket from 'ws';
+
+useWebSocketImplementation(WebSocket);
 
 const RELAYS = [
   'wss://relay.damus.io',
