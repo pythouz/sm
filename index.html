@@ -3,420 +3,515 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pulse - Nostr P2P Platform</title>
+    <title>Pulse Enterprise - Sovereign P2P Mesh</title>
     <script src="https://unpkg.com/nostr-tools@1.17.0/lib/nostr.bundle.js"></script>
     <style>
         :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
+            --bg: #090d16;
+            --panel: #111827;
+            --panel-border: #1f2937;
             --accent: #6366f1;
-            --text: #f8fafc;
-            --text-muted: #94a3b8;
-            --border: #334155;
+            --accent-glow: rgba(99, 102, 241, 0.25);
+            --success: #10b981;
+            --danger: #ef4444;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
         }
 
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: system-ui, -apple-system, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text);
-            margin: 0;
-            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            padding: 24px;
             display: flex;
             justify-content: center;
         }
 
-        .container {
+        .app-container {
             width: 100%;
-            max-width: 650px;
+            max-width: 680px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 16px;
         }
 
+        .header-panel {
+            background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+            border: 1px solid #312e81;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+        }
+
+        .title-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .title-group h1 { font-size: 1.25rem; letter-spacing: -0.02em; color: #e0e7ff; }
+        .network-badge { font-size: 0.75rem; padding: 4px 10px; border-radius: 9999px; background: rgba(16, 185, 129, 0.1); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.2); }
+
+        .meta-info { font-size: 0.8rem; color: var(--text-muted); font-family: monospace; }
+
         .card {
-            background-color: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
             padding: 20px;
         }
 
-        h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
+        .card h2 { font-size: 1rem; color: var(--text-main); margin-bottom: 12px; }
 
-        textarea, input[type="text"] {
+        .input-group { display: flex; gap: 8px; margin-bottom: 12px; }
+
+        input[type="text"], textarea {
             width: 100%;
-            background: #090d16;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text);
-            padding: 10px;
-            box-sizing: border-box;
+            background: #030712;
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            color: var(--text-main);
+            padding: 12px;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
         }
 
-        textarea { height: 80px; resize: none; }
-        input[type="text"] { height: 40px; margin-bottom: 8px; }
+        input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
+        textarea { height: 90px; resize: none; }
 
-        button {
-            background-color: var(--accent);
-            color: white;
+        .btn {
+            background: var(--accent);
+            color: #fff;
             border: none;
-            padding: 10px 16px;
-            border-radius: 6px;
+            border-radius: 10px;
+            padding: 10px 18px;
+            font-weight: 600;
+            font-size: 0.875rem;
             cursor: pointer;
-            font-weight: bold;
-            margin-top: 8px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px var(--accent-glow);
         }
 
-        button:hover { opacity: 0.9; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        .btn-danger { background: var(--danger); box-shadow: none; }
 
-        .feed-item {
-            border-bottom: 1px solid var(--border);
-            padding: 12px 0;
-        }
-        .feed-item:last-child { border-bottom: none; }
-        .author { font-size: 0.8rem; color: var(--text-muted); }
-        .content { margin-top: 6px; word-break: break-word; }
+        .grid-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+        .stat-box { background: #030712; border: 1px solid var(--panel-border); padding: 10px; border-radius: 8px; text-align: center; }
+        .stat-label { font-size: 0.7rem; color: var(--text-muted); }
+        .stat-value { font-size: 0.9rem; font-weight: bold; margin-top: 2px; }
 
-        .audio-status {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .badge {
-            font-size: 0.75rem;
-            padding: 4px 8px;
-            border-radius: 12px;
-            background: var(--border);
-        }
-
-        .badge.active { background: #22c55e; color: black; }
+        .feed-container { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+        .post-card { background: #030712; border: 1px solid var(--panel-border); border-radius: 10px; padding: 14px; }
+        .post-header { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+        .post-body { font-size: 0.9rem; line-height: 1.4; word-break: break-word; }
+        
+        #remote-audio-container { display: none; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <!-- Identity Header -->
-    <div class="card">
-        <h2>الهوية والاتصال</h2>
-        <div class="author" id="my-pubkey">جاري إنشاء الهوية...</div>
-        <div class="author" id="relay-status">جاري الاتصال بالـ Relay...</div>
+<div class="app-container">
+    <div class="header-panel">
+        <div class="title-group">
+            <h1>PULSE ENGINE v2.0</h1>
+            <span class="network-badge" id="net-status">جاري الربط...</span>
+        </div>
+        <div class="meta-info" id="pubkey-display">الهوية: ...</div>
     </div>
 
-    <!-- Audio Room (Dynamic Name + Cascade P2P) -->
+    <!-- Voice Control -->
     <div class="card">
-        <h2>الغرفة الصوتية (Dynamic P2P Room)</h2>
-        <input type="text" id="room-name-input" placeholder="ادخل اسم الغرفة (مثال: main-room)" value="general" />
-        <div class="audio-status">
-            <button id="btn-join-room" onclick="toggleAudioRoom()">دخول الغرفة</button>
-            <button id="btn-mute" onclick="toggleMute()" disabled>كتم المايك</button>
-            <span id="vad-indicator" class="badge">صامت</span>
-            <span id="peers-count" class="badge">المتصلون المباشرون: 0</span>
+        <h2>الغرفة الصوتية المباشرة (Ultra-Low Latency Mesh)</h2>
+        <div class="input-group">
+            <input type="text" id="room-id" placeholder="اسم الغرفة" value="main-room" />
+            <button class="btn" id="btn-room" onclick="toggleRoom()">دخول الغرفة</button>
+            <button class="btn btn-danger" id="btn-mute" onclick="toggleMute()" disabled>كتم</button>
+        </div>
+
+        <div class="grid-stats">
+            <div class="stat-box">
+                <div class="stat-label">حالة الصوت</div>
+                <div class="stat-value" id="stat-vad">معطل</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">المتصلون المباشرون</div>
+                <div class="stat-value" id="stat-peers">0</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">السيرفرات النشطة</div>
+                <div class="stat-value" id="stat-relays">0/3</div>
+            </div>
         </div>
     </div>
 
-    <!-- Text Post Creation -->
+    <!-- Post Creation -->
     <div class="card">
-        <h2>نشر منشور جديد</h2>
-        <textarea id="post-input" placeholder="اكتب شيئاً للشبكة..."></textarea>
-        <button onclick="publishPost()">انشر الآن</button>
+        <h2>منشور جديد</h2>
+        <textarea id="post-text" placeholder="اكتب للشبكة بدون وسيط..."></textarea>
+        <button class="btn" style="margin-top: 8px;" onclick="publishPost()">نشر فوري</button>
     </div>
 
-    <!-- Live Feed -->
+    <!-- Feed -->
     <div class="card">
-        <h2>التغذية المباشرة (Pulse MVP)</h2>
-        <div id="feed-container">في انتظار المنشورات...</div>
+        <h2>التغذية المباشرة</h2>
+        <div class="feed-container" id="feed-list"></div>
     </div>
 </div>
 
+<!-- Container for dynamic audio rendering -->
+<div id="remote-audio-container"></div>
+
 <script>
-    const APP_TAG = "pulse-mvp-demo-v1";
-    const RELAY_URL = "wss://relay.damus.io";
-    const MAX_CHILDREN = 3;
+    const APP_TAG = "pulse-prod-v2";
+    const RELAYS = [
+        "wss://relay.damus.io",
+        "wss://nos.lol",
+        "wss://relay.nostr.band"
+    ];
+
+    const ICE_SERVERS = [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" }
+    ];
 
     let sk, pk;
-    let ws;
+    let sockets = [];
+    let activeRelayCount = 0;
     let localStream = null;
     let inRoom = false;
     let isMuted = false;
-    let currentRoomName = "";
-    let heartbeatInterval = null;
-    let peerConnections = new Map(); // Remote PubKey -> RTCPeerConnection
-    let childrenKeys = new Set();
+    let currentRoom = "";
+    let heartbeatTimer = null;
 
-    // 1. Initialize Nostr Identity & Relay
+    // Map<remotePk, { pc: RTCPeerConnection, audioEl: HTMLAudioElement }>
+    const peers = new Map();
+    const processedEvents = new Set();
+
+    // 1. Core Initialization
     async function init() {
-        const storedSk = localStorage.getItem('nostr_sk');
-        if (storedSk) {
-            sk = storedSk;
-        } else {
-            sk = NostrTools.generatePrivateKey();
-            localStorage.setItem('nostr_sk', sk);
-        }
+        sk = localStorage.getItem('nostr_sk_v2') || NostrTools.generatePrivateKey();
+        localStorage.setItem('nostr_sk_v2', sk);
         pk = NostrTools.getPublicKey(sk);
 
-        document.getElementById('my-pubkey').innerText = `المفتاح العام: ${pk.substring(0, 12)}...`;
+        document.getElementById('pubkey-display').innerText = `المفتاح العام: ${pk.substring(0, 16)}...`;
 
-        // Check if room name is in URL Hash (Auto Rejoin on Refresh)
-        if (window.location.hash) {
-            const hashRoom = window.location.hash.replace("#", "").trim();
-            if (hashRoom) {
-                document.getElementById('room-name-input').value = hashRoom;
-            }
-        }
+        connectRelays();
+    }
 
-        ws = new WebSocket(RELAY_URL);
-
-        ws.onopen = () => {
-            document.getElementById('relay-status').innerText = `متصل بالشبكة: ${RELAY_URL}`;
-            subscribeFeed();
+    function connectRelays() {
+        RELAYS.forEach(url => {
+            const ws = new WebSocket(url);
             
-            // Auto rejoin if hash existed
-            if (window.location.hash) {
-                toggleAudioRoom();
-            }
-        };
+            ws.onopen = () => {
+                activeRelayCount++;
+                updateRelayUI();
+                subscribeFeed(ws);
+                if (inRoom) subscribeRoom(ws);
+            };
 
-        ws.onmessage = (e) => {
-            const data = JSON.parse(e.data);
-            if (data[0] === "EVENT") {
-                const event = data[2];
-                if (event.kind === 1) {
-                    renderPost(event);
-                } else if (event.kind === 20000 && inRoom) {
-                    handleSignalingEvent(event);
-                }
-            }
-        };
+            ws.onclose = () => {
+                activeRelayCount = Math.max(0, activeRelayCount - 1);
+                updateRelayUI();
+            };
+
+            ws.onerror = () => {};
+
+            ws.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data[0] === "EVENT") {
+                        const evt = data[2];
+                        if (processedEvents.has(evt.id)) return;
+                        processedEvents.add(evt.id);
+
+                        if (evt.kind === 1) renderPost(evt);
+                        if (evt.kind === 20000 && inRoom) handleSignaling(evt);
+                    }
+                } catch(err) {}
+            };
+
+            sockets.push(ws);
+        });
+    }
+
+    function updateRelayUI() {
+        document.getElementById('stat-relays').innerText = `${activeRelayCount}/${RELAYS.length}`;
+        const badge = document.getElementById('net-status');
+        if (activeRelayCount > 0) {
+            badge.innerText = "الشبكة نشطة";
+            badge.style.color = "var(--success)";
+        } else {
+            badge.innerText = "منقطع";
+            badge.style.color = "var(--danger)";
+        }
+    }
+
+    function broadcast(evt) {
+        evt.id = NostrTools.getEventHash(evt);
+        evt.sig = NostrTools.signEvent(evt, sk);
+        const payload = JSON.stringify(["EVENT", evt]);
+        sockets.forEach(ws => {
+            if (ws.readyState === WebSocket.OPEN) ws.send(payload);
+        });
     }
 
     // 2. Feed Management
-    function subscribeFeed() {
-        const req = JSON.stringify([
-            "REQ", "feed_sub",
+    function subscribeFeed(ws) {
+        ws.send(JSON.stringify([
+            "REQ", "feed_" + Math.random(),
             { kinds: [1], "#t": [APP_TAG], limit: 20 }
-        ]);
-        ws.send(req);
+        ]));
     }
 
-    async function publishPost() {
-        const text = document.getElementById('post-input').value.trim();
+    function publishPost() {
+        const input = document.getElementById('post-text');
+        const text = input.value.trim();
         if (!text) return;
 
-        const event = {
+        broadcast({
             kind: 1,
             pubkey: pk,
             created_at: Math.floor(Date.now() / 1000),
             tags: [["t", APP_TAG]],
             content: text
-        };
-        event.id = NostrTools.getEventHash(event);
-        event.sig = NostrTools.signEvent(event, sk);
-
-        ws.send(JSON.stringify(["EVENT", event]));
-        document.getElementById('post-input').value = '';
-    }
-
-    const seenPosts = new Set();
-    function renderPost(event) {
-        if (seenPosts.has(event.id)) return;
-        seenPosts.add(event.id);
-
-        const container = document.getElementById('feed-container');
-        if (container.innerText.includes("في انتظار")) container.innerHTML = "";
-
-        const div = document.createElement('div');
-        div.className = 'feed-item';
-        div.innerHTML = `
-            <div class="author">${event.pubkey.substring(0, 8)}... • ${new Date(event.created_at * 1000).toLocaleTimeString('ar-EG')}</div>
-            <div class="content">${escapeHtml(event.content)}</div>
-        `;
-        container.prepend(div);
-    }
-
-    // 3. Audio & VAD (Voice Activity Detection)
-    async function setupAudioWithVAD() {
-        localStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 24000, channelCount: 1 }
         });
 
-        const audioTrack = localStream.getAudioTracks()[0];
+        input.value = "";
+    }
+
+    function renderPost(evt) {
+        const container = document.getElementById('feed-list');
+        const card = document.createElement('div');
+        card.className = 'post-card';
+        card.innerHTML = `
+            <div class="post-header">
+                <span>${evt.pubkey.substring(0, 10)}...</span>
+                <span>${new Date(evt.created_at * 1000).toLocaleTimeString('ar-EG')}</span>
+            </div>
+            <div class="post-body">${escapeHtml(evt.content)}</div>
+        `;
+        container.prepend(card);
+    }
+
+    // 3. Audio & WebRTC Logic
+    async function toggleRoom() {
+        const btn = document.getElementById('btn-room');
+        const roomInput = document.getElementById('room-id');
+
+        if (!inRoom) {
+            currentRoom = roomInput.value.trim().toLowerCase() || "main-room";
+            
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+            } catch(e) {
+                alert("تعذر الوصول إلى المايكروفون!");
+                return;
+            }
+
+            setupVAD();
+            inRoom = true;
+            btn.innerText = "مغادرة";
+            btn.classList.add("btn-danger");
+            roomInput.disabled = true;
+            document.getElementById('btn-mute').disabled = false;
+
+            // Subscribe on all active relays
+            sockets.forEach(ws => {
+                if (ws.readyState === WebSocket.OPEN) subscribeRoom(ws);
+            });
+
+            // Send Join Signal
+            sendSignal({ type: "join" });
+
+            // Light Heartbeat (15s instead of 4s to prevent rate limits)
+            heartbeatTimer = setInterval(() => {
+                if (inRoom) sendSignal({ type: "ping" });
+            }, 15000);
+
+        } else {
+            leaveRoom();
+        }
+    }
+
+    function leaveRoom() {
+        inRoom = false;
+        const btn = document.getElementById('btn-room');
+        btn.innerText = "دخول الغرفة";
+        btn.classList.remove("btn-danger");
+        document.getElementById('room-id').disabled = false;
+        document.getElementById('btn-mute').disabled = true;
+        document.getElementById('stat-vad').innerText = "معطل";
+
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        if (localStream) localStream.getTracks().forEach(t => t.stop());
+
+        peers.forEach(peer => closePeer(peer));
+        peers.clear();
+        document.getElementById('remote-audio-container').innerHTML = "";
+        updatePeersUI();
+    }
+
+    function toggleMute() {
+        isMuted = !isMuted;
+        if (localStream) {
+            localStream.getAudioTracks()[0].enabled = !isMuted;
+        }
+        document.getElementById('btn-mute').innerText = isMuted ? "تشغيل" : "كتم";
+        document.getElementById('stat-vad').innerText = isMuted ? "مكتوم" : "نشط";
+    }
+
+    function setupVAD() {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const analyser = audioCtx.createAnalyser();
         const source = audioCtx.createMediaStreamSource(localStream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
         source.connect(analyser);
 
         const data = new Uint8Array(analyser.frequencyBinCount);
-        const vadBadge = document.getElementById('vad-indicator');
+        const vadUI = document.getElementById('stat-vad');
 
         setInterval(() => {
             if (!inRoom || isMuted) return;
             analyser.getByteFrequencyData(data);
             const volume = data.reduce((a, b) => a + b, 0) / data.length;
-            const isSpeaking = volume > 12;
-
-            if (audioTrack.enabled !== isSpeaking) {
-                audioTrack.enabled = isSpeaking;
-            }
-
-            vadBadge.innerText = isSpeaking ? " يتحدث..." : "صامت";
-            vadBadge.className = isSpeaking ? "badge active" : "badge";
-        }, 200);
-    }
-
-    // 4. Dynamic Audio Room & Peer Cascade
-    async function toggleAudioRoom() {
-        const btn = document.getElementById('btn-join-room');
-        const roomInput = document.getElementById('room-name-input');
-        
-        if (!inRoom) {
-            currentRoomName = roomInput.value.trim().toLowerCase() || "general";
-            window.location.hash = currentRoomName;
-
-            await setupAudioWithVAD();
-            inRoom = true;
-            btn.innerText = "مغادرة الغرفة";
-            roomInput.disabled = true;
-            document.getElementById('btn-mute').disabled = false;
-
-            subscribeRoomSignals();
             
-            // Heartbeat: Announce presence every 4 seconds
-            sendSignal({ type: "presence" });
-            heartbeatInterval = setInterval(() => {
-                if (inRoom) sendSignal({ type: "presence" });
-            }, 4000);
-
-        } else {
-            inRoom = false;
-            btn.innerText = "دخول الغرفة";
-            roomInput.disabled = false;
-            document.getElementById('btn-mute').disabled = true;
-            window.location.hash = "";
-
-            if (heartbeatInterval) clearInterval(heartbeatInterval);
-            if (localStream) localStream.getTracks().forEach(t => t.stop());
-            peerConnections.forEach(pc => pc.close());
-            peerConnections.clear();
-            childrenKeys.clear();
-            updatePeerCount();
-        }
+            if (volume > 10) {
+                vadUI.innerText = "يتحدث...";
+                vadUI.style.color = "var(--success)";
+            } else {
+                vadUI.innerText = "صامت";
+                vadUI.style.color = "var(--text-muted)";
+            }
+        }, 300);
     }
 
-    function toggleMute() {
-        isMuted = !isMuted;
-        if (localStream) localStream.getAudioTracks()[0].enabled = !isMuted;
-        document.getElementById('btn-mute').innerText = isMuted ? "إلغاء الكتم" : "كتم المايك";
-    }
-
-    function getRoomTag() {
-        return `${APP_TAG}-room-${currentRoomName}`;
-    }
-
-    function subscribeRoomSignals() {
+    function subscribeRoom(ws) {
         ws.send(JSON.stringify([
-            "REQ", "room_sub",
-            { kinds: [20000], "#t": [getRoomTag()], limit: 15 }
+            "REQ", "room_" + Math.random(),
+            { kinds: [20000], "#t": [getRoomTag()], limit: 10 }
         ]));
     }
 
-    async function sendSignal(payload, targetPk = null) {
-        const event = {
+    function getRoomTag() {
+        return `${APP_TAG}-room-${currentRoom}`;
+    }
+
+    function sendSignal(payload, targetPk = null) {
+        broadcast({
             kind: 20000,
             pubkey: pk,
             created_at: Math.floor(Date.now() / 1000),
             tags: [["t", getRoomTag()]],
             content: JSON.stringify({ ...payload, target: targetPk })
-        };
-        event.id = NostrTools.getEventHash(event);
-        event.sig = NostrTools.signEvent(event, sk);
-        ws.send(JSON.stringify(["EVENT", event]));
+        });
     }
 
-    async function handleSignalingEvent(event) {
-        if (event.pubkey === pk) return;
-        let data;
-        try { data = JSON.parse(event.content); } catch (e) { return; }
+    async function handleSignaling(evt) {
+        if (evt.pubkey === pk) return;
 
+        let data;
+        try { data = JSON.parse(evt.content); } catch(e) { return; }
         if (data.target && data.target !== pk) return;
 
-        // Discovery via presence or explicit join
-        if (data.type === "presence" || data.type === "join") {
-            if (!peerConnections.has(event.pubkey) && childrenKeys.size < MAX_CHILDREN) {
-                createPeer(event.pubkey, true);
+        const remotePk = evt.pubkey;
+
+        if (data.type === "join" || data.type === "ping") {
+            if (!peers.has(remotePk)) {
+                createPeerConnection(remotePk, true);
             }
         } else if (data.type === "offer") {
-            const pc = createPeer(event.pubkey, false);
-            await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            sendSignal({ type: "answer", answer }, event.pubkey);
+            const peer = createPeerConnection(remotePk, false);
+            await peer.pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+            const answer = await peer.pc.createAnswer();
+            await peer.pc.setLocalDescription(answer);
+            sendSignal({ type: "answer", answer }, remotePk);
         } else if (data.type === "answer") {
-            const pc = peerConnections.get(event.pubkey);
-            if (pc) await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+            const peer = peers.get(remotePk);
+            if (peer) await peer.pc.setRemoteDescription(new RTCSessionDescription(data.answer));
         } else if (data.type === "candidate") {
-            const pc = peerConnections.get(event.pubkey);
-            if (pc && data.candidate) await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+            const peer = peers.get(remotePk);
+            if (peer && data.candidate) {
+                try { await peer.pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch(e) {}
+            }
         }
     }
 
-    function createPeer(remotePk, isInitiator) {
-        if (peerConnections.has(remotePk)) return peerConnections.get(remotePk);
+    function createPeerConnection(remotePk, isInitiator) {
+        if (peers.has(remotePk)) return peers.get(remotePk);
 
-        const pc = new RTCPeerConnection({
-            iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-        });
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        
+        // Dynamic Audio Element for remote peer
+        const audioEl = document.createElement('audio');
+        audioEl.autoplay = true;
+        audioEl.playsInline = true;
+        document.getElementById('remote-audio-container').appendChild(audioEl);
 
-        peerConnections.set(remotePk, pc);
-        childrenKeys.add(remotePk);
+        const peerObj = { pc, audioEl };
+        peers.set(remotePk, peerObj);
 
+        // Add Local Audio Tracks
         if (localStream) {
-            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+            localStream.getAudioTracks().forEach(track => pc.addTrack(track, localStream));
         }
 
-        pc.ontrack = (evt) => {
-            const audio = new Audio();
-            audio.srcObject = evt.streams[0];
-            audio.play();
-
-            // Forward track to other peers in cascade tree
-            peerConnections.forEach((otherPc, otherPk) => {
-                if (otherPk !== remotePk) {
-                    otherPc.addTrack(evt.track, evt.streams[0]);
-                }
-            });
+        // Receive Remote Audio Tracks
+        pc.ontrack = (event) => {
+            if (event.streams && event.streams[0]) {
+                audioEl.srcObject = event.streams[0];
+            }
         };
 
-        pc.onicecandidate = (evt) => {
-            if (evt.candidate) {
-                sendSignal({ type: "candidate", candidate: evt.candidate }, remotePk);
+        // ICE Candidates
+        pc.onicecandidate = (event) => {
+            if (event.candidate) {
+                sendSignal({ type: "candidate", candidate: event.candidate }, remotePk);
             }
         };
 
         pc.onconnectionstatechange = () => {
             if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-                peerConnections.delete(remotePk);
-                childrenKeys.delete(remotePk);
-                updatePeerCount();
+                closePeer(peerObj);
+                peers.delete(remotePk);
+                updatePeersUI();
             }
         };
 
         if (isInitiator) {
             pc.onnegotiationneeded = async () => {
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                sendSignal({ type: "offer", offer }, remotePk);
+                try {
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    sendSignal({ type: "offer", offer }, remotePk);
+                } catch(e) {}
             };
         }
 
-        updatePeerCount();
-        return pc;
+        updatePeersUI();
+        return peerObj;
     }
 
-    function updatePeerCount() {
-        document.getElementById('peers-count').innerText = `المتصلون المباشرون: ${peerConnections.size}`;
+    function closePeer(peerObj) {
+        try {
+            peerObj.pc.close();
+            if (peerObj.audioEl) peerObj.audioEl.remove();
+        } catch(e) {}
+    }
+
+    function updatePeersUI() {
+        document.getElementById('stat-peers').innerText = peers.size;
     }
 
     function escapeHtml(str) {
