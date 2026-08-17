@@ -1,189 +1,385 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pulse — المنشورات اللحظية</title>
-<style>
-  body { font-family: Tahoma, Arial, sans-serif; background:#0f1115; color:#e8e8e8; max-width:640px; margin:0 auto; padding:16px; }
-  h1 { font-size:20px; }
-  #status { font-size:13px; color:#9aa; margin-bottom:12px; }
-  .ok { color:#4caf50; }
-  textarea { width:100%; box-sizing:border-box; padding:10px; border-radius:8px; border:1px solid #333; background:#1a1d24; color:#eee; font-family:inherit; font-size:15px; }
-  button { padding:8px 16px; border-radius:8px; border:none; background:#5865f2; color:#fff; cursor:pointer; font-size:14px; margin-top:8px; }
-  button:hover { background:#4752c4; }
-  button:disabled { background:#444; cursor:not-allowed; }
-  .post { background:#1a1d24; border:1px solid #2a2d34; border-radius:10px; padding:12px; margin-top:12px; }
-  .post .meta { font-size:12px; color:#888; margin-bottom:6px; }
-  .post .content { font-size:15px; margin-bottom:8px; white-space:pre-wrap; }
-  .actions { display:flex; gap:10px; align-items:center; }
-  .actions button { margin-top:0; padding:5px 12px; font-size:13px; background:#2a2d34; }
-  .actions button.liked { background:#c2185b; }
-  .reply-box { display:none; margin-top:8px; }
-  .reply-box.open { display:flex; gap:6px; }
-  .reply-box input { flex:1; padding:6px 10px; border-radius:6px; border:1px solid #333; background:#0f1115; color:#eee; }
-  .replies { margin-top:8px; padding-right:14px; border-right:2px solid #333; }
-  .reply { font-size:13px; color:#ccc; margin-top:6px; }
-  .likecount { font-size:13px; color:#aaa; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulse - Nostr P2P Platform</title>
+    <!-- Nostr Library -->
+    <script src="https://unpkg.com/nostr-tools@1.17.0/lib/nostr.bundle.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #6366f1;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 650px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; color: var(--accent); }
+
+        textarea {
+            width: 100%;
+            height: 80px;
+            background: #090d16;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            padding: 10px;
+            box-sizing: border-box;
+            resize: none;
+        }
+
+        button {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 8px;
+        }
+
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .feed-item {
+            border-bottom: 1px solid var(--border);
+            padding: 12px 0;
+        }
+        .feed-item:last-child { border-bottom: none; }
+        .author { font-size: 0.8rem; color: var(--text-muted); }
+        .content { margin-top: 6px; word-break: break-word; }
+
+        .audio-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 12px;
+            background: var(--border);
+        }
+
+        .badge.active { background: #22c55e; color: black; }
+    </style>
 </head>
 <body>
 
-<h1>Pulse — تجربة حية على شبكة Nostr</h1>
-<div style="margin-bottom:12px;"><a href="voice.html" style="color:#5865f2;">🎙️ الغرف الصوتية →</a></div>
-<div id="status">بيتصل بالـ relays...</div>
+<div class="container">
+    <!-- Identity Header -->
+    <div class="card">
+        <h2>الهوية والاتصال</h2>
+        <div class="author" id="my-pubkey">جاري إنشاء الهوية...</div>
+        <div class="author" id="relay-status">جاري الاتصال بالـ Relay...</div>
+    </div>
 
-<div id="identity" style="font-size:12px; color:#888; margin-bottom:16px;"></div>
+    <!-- Audio Room (P2P Cascade) -->
+    <div class="card">
+        <h2>الغرفة الصوتية (P2P Cascade)</h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">
+            تعتمد على توزيع البث شجرياً بين المتصفحات مباشرة وتوقف الصوت تلقائياً عند الصمت لتوفير الموارد.
+        </p>
+        <div class="audio-status">
+            <button id="btn-join-room" onclick="toggleAudioRoom()">دخول الغرفة الصوتية</button>
+            <button id="btn-mute" onclick="toggleMute()" disabled>كتم المايك</button>
+            <span id="vad-indicator" class="badge">صامت</span>
+            <span id="peers-count" class="badge">المتصلون المباشرون: 0</span>
+        </div>
+    </div>
 
-<textarea id="postInput" rows="3" placeholder="اكتب منشور..."></textarea>
-<button id="postBtn">انشر</button>
+    <!-- Text Post Creation -->
+    <div class="card">
+        <h2>نشر منشور جديد</h2>
+        <textarea id="post-input" placeholder="اكتب شيئاً للشبكة..."></textarea>
+        <button onclick="publishPost()">انشر الآن</button>
+    </div>
 
-<div id="feed"></div>
+    <!-- Live Feed -->
+    <div class="card">
+        <h2>التغذية المباشرة (Pulse MVP)</h2>
+        <div id="feed-container">في انتظار المنشورات...</div>
+    </div>
+</div>
 
-<script type="module">
-import { SimplePool, finalizeEvent, generateSecretKey, getPublicKey, nip19 } from 'https://esm.sh/nostr-tools@2.24.2';
+<script>
+    const APP_TAG = "pulse-mvp-demo-v1";
+    const RELAY_URL = "wss://relay.damus.io";
+    const MAX_CHILDREN = 3;
 
-const RELAYS = ['wss://relay.damus.io', 'wss://relay.primal.net', 'wss://nos.lol'];
-const pool = new SimplePool();
-const statusEl = document.getElementById('status');
-const feedEl = document.getElementById('feed');
-const identityEl = document.getElementById('identity');
+    let sk, pk;
+    let ws;
+    let localStream = null;
+    let inRoom = false;
+    let isMuted = false;
+    let peerConnections = new Map(); // Remote PubKey -> RTCPeerConnection
+    let childrenKeys = new Set();
 
-function bytesToHex(bytes) { return [...bytes].map(b => b.toString(16).padStart(2,'0')).join(''); }
-function hexToBytes(hex) { return Uint8Array.from(hex.match(/.{2}/g).map(b => parseInt(b,16))); }
+    // 1. Initialize Nostr Identity & Relay
+    async function init() {
+        const storedSk = localStorage.getItem('nostr_sk');
+        if (storedSk) {
+            sk = storedSk;
+        } else {
+            sk = NostrTools.generatePrivateKey();
+            localStorage.setItem('nostr_sk', sk);
+        }
+        pk = NostrTools.getPublicKey(sk);
 
-let sk = localStorage.getItem('pulse_sk');
-if (!sk) {
-  sk = bytesToHex(generateSecretKey());
-  localStorage.setItem('pulse_sk', sk);
-}
-const skBytes = hexToBytes(sk);
-const pk = getPublicKey(skBytes);
-identityEl.textContent = 'هويتك: ' + nip19.npubEncode(pk);
+        document.getElementById('my-pubkey').innerText = `المفتاح العام: ${pk.substring(0, 12)}...`;
 
-const posts = new Map();
-const orphanReactions = [];
-const seenEventIds = new Set();
+        ws = new WebSocket(RELAY_URL);
 
-function attachOrphans(postId) {
-  for (let i = orphanReactions.length - 1; i >= 0; i--) {
-    const o = orphanReactions[i];
-    if (o.targetId !== postId) continue;
-    const p = posts.get(postId);
-    if (o.type === 'like') p.likes.add(o.event.pubkey);
-    else p.replies.push(o.event);
-    orphanReactions.splice(i, 1);
-  }
-}
+        ws.onopen = () => {
+            document.getElementById('relay-status').innerText = `متصل بالشبكة: ${RELAY_URL}`;
+            subscribeFeed();
+        };
 
-function render() {
-  feedEl.innerHTML = '';
-  const sorted = [...posts.values()].sort((a, b) => b.event.created_at - a.event.created_at);
-  for (const p of sorted) {
-    const div = document.createElement('div');
-    div.className = 'post';
-    const liked = p.likes.has(pk);
-    div.innerHTML = `
-      <div class="meta">${p.event.pubkey.slice(0,8)}... · ${new Date(p.event.created_at*1000).toLocaleTimeString('ar-EG')}</div>
-      <div class="content"></div>
-      <div class="actions">
-        <button class="likeBtn ${liked?'liked':''}">${liked?'❤️ لايك':'🤍 لايك'}</button>
-        <span class="likecount">${p.likes.size}</span>
-        <button class="replyBtn">💬 رد</button>
-      </div>
-      <div class="reply-box"><input placeholder="اكتب رد..."><button class="sendReply">إرسال</button></div>
-      <div class="replies"></div>
-    `;
-    div.querySelector('.content').textContent = p.event.content;
-    div.querySelector('.likeBtn').onclick = () => doLike(p.event);
-    const box = div.querySelector('.reply-box');
-    div.querySelector('.replyBtn').onclick = () => box.classList.toggle('open');
-    div.querySelector('.sendReply').onclick = () => {
-      const input = box.querySelector('input');
-      if (input.value.trim()) { doReply(p.event, input.value.trim()); input.value=''; box.classList.remove('open'); }
-    };
-    const repliesEl = div.querySelector('.replies');
-    p.replies.sort((a,b)=>a.created_at-b.created_at).forEach(r => {
-      const rd = document.createElement('div');
-      rd.className = 'reply';
-      rd.textContent = `${r.pubkey.slice(0,8)}...: ${r.content}`;
-      repliesEl.appendChild(rd);
-    });
-    feedEl.appendChild(div);
-  }
-}
-
-function ensurePost(event) {
-  if (!posts.has(event.id)) posts.set(event.id, { event, likes: new Set(), replies: [] });
-  return posts.get(event.id);
-}
-
-async function publish(event) {
-  const results = await Promise.allSettled(pool.publish(RELAYS, event));
-  const ok = results.filter(r => r.status === 'fulfilled').length;
-  console.log(`kind ${event.kind} → ${ok}/${RELAYS.length}`);
-  return event;
-}
-
-const APP_TAG = 'pulse-mvp-demo-v1';
-
-document.getElementById('postBtn').onclick = async () => {
-  const input = document.getElementById('postInput');
-  const content = input.value.trim();
-  if (!content) return;
-  const event = finalizeEvent({ kind:1, created_at:Math.floor(Date.now()/1000), tags:[['t',APP_TAG]], content }, skBytes);
-  seenEventIds.add(event.id);
-  ensurePost(event);
-  render();
-  input.value = '';
-  await publish(event);
-};
-
-async function doLike(target) {
-  const event = finalizeEvent({ kind:7, created_at:Math.floor(Date.now()/1000), tags:[['e',target.id],['p',target.pubkey],['t',APP_TAG]], content:'+' }, skBytes);
-  seenEventIds.add(event.id);
-  posts.get(target.id).likes.add(pk);
-  render();
-  await publish(event);
-}
-
-async function doReply(target, content) {
-  const event = finalizeEvent({ kind:1, created_at:Math.floor(Date.now()/1000), tags:[['e',target.id,'','reply'],['p',target.pubkey],['t',APP_TAG]], content }, skBytes);
-  seenEventIds.add(event.id);
-  posts.get(target.id).replies.push(event);
-  render();
-  await publish(event);
-}
-
-pool.subscribeMany(RELAYS, { kinds:[1,7], '#t':[APP_TAG], limit:100 }, {
-  onevent(event) {
-    if (seenEventIds.has(event.id)) return;
-    seenEventIds.add(event.id);
-
-    if (event.kind === 1) {
-      const replyTag = event.tags.find(t => t[0]==='e');
-      if (replyTag) {
-        const parent = posts.get(replyTag[1]);
-        if (parent) { parent.replies.push(event); }
-        else { orphanReactions.push({ targetId: replyTag[1], type:'reply', event }); }
-      } else {
-        ensurePost(event);
-        attachOrphans(event.id);
-      }
-    } else if (event.kind === 7) {
-      const eTag = event.tags.find(t => t[0]==='e');
-      if (eTag) {
-        const parent = posts.get(eTag[1]);
-        if (parent) { parent.likes.add(event.pubkey); }
-        else { orphanReactions.push({ targetId: eTag[1], type:'like', event }); }
-      }
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if (data[0] === "EVENT") {
+                const event = data[2];
+                if (event.kind === 1) {
+                    renderPost(event);
+                } else if (event.kind === 20000 && inRoom) {
+                    handleSignalingEvent(event);
+                }
+            }
+        };
     }
-    render();
-  },
-  oneose() {
-    statusEl.innerHTML = '<span class="ok">متصل ✓ — بيستقبل المنشورات لحظياً</span>';
-  }
-});
+
+    // 2. Feed Management (Filtered by APP_TAG)
+    function subscribeFeed() {
+        const subId = "feed_sub";
+        const req = JSON.stringify([
+            "REQ", subId,
+            { kinds: [1], "#t": [APP_TAG], limit: 20 }
+        ]);
+        ws.send(req);
+    }
+
+    async function publishPost() {
+        const text = document.getElementById('post-input').value.trim();
+        if (!text) return;
+
+        const event = {
+            kind: 1,
+            pubkey: pk,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [["t", APP_TAG]],
+            content: text
+        };
+        event.id = NostrTools.getEventHash(event);
+        event.sig = NostrTools.signEvent(event, sk);
+
+        ws.send(JSON.stringify(["EVENT", event]));
+        document.getElementById('post-input').value = '';
+    }
+
+    const seenPosts = new Set();
+    function renderPost(event) {
+        if (seenPosts.has(event.id)) return;
+        seenPosts.add(event.id);
+
+        const container = document.getElementById('feed-container');
+        if (container.innerText.includes("في انتظار")) container.innerHTML = "";
+
+        const div = document.createElement('div');
+        div.className = 'feed-item';
+        div.innerHTML = `
+            <div class="author">${event.pubkey.substring(0, 8)}... • ${new Date(event.created_at * 1000).toLocaleTimeString('ar-EG')}</div>
+            <div class="content">${escapeHtml(event.content)}</div>
+        `;
+        container.prepend(div);
+    }
+
+    // 3. Audio & VAD (Voice Activity Detection)
+    async function setupAudioWithVAD() {
+        localStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 24000, channelCount: 1 }
+        });
+
+        const audioTrack = localStream.getAudioTracks()[0];
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioCtx.createAnalyser();
+        const source = audioCtx.createMediaStreamSource(localStream);
+        source.connect(analyser);
+
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const vadBadge = document.getElementById('vad-indicator');
+
+        setInterval(() => {
+            if (!inRoom || isMuted) return;
+            analyser.getByteFrequencyData(data);
+            const volume = data.reduce((a, b) => a + b, 0) / data.length;
+            const isSpeaking = volume > 12;
+
+            if (audioTrack.enabled !== isSpeaking) {
+                audioTrack.enabled = isSpeaking;
+            }
+
+            vadBadge.innerText = isSpeaking ? " يتحدث..." : "صامت";
+            vadBadge.className = isSpeaking ? "badge active" : "badge";
+        }, 200);
+    }
+
+    // 4. Audio Room & Cascade P2P
+    async function toggleAudioRoom() {
+        const btn = document.getElementById('btn-join-room');
+        if (!inRoom) {
+            await setupAudioWithVAD();
+            inRoom = true;
+            btn.innerText = "مغادرة الغرفة";
+            document.getElementById('btn-mute').disabled = false;
+            sendSignal({ type: "join" });
+            subscribeRoomSignals();
+        } else {
+            inRoom = false;
+            btn.innerText = "دخول الغرفة الصوتية";
+            document.getElementById('btn-mute').disabled = true;
+            if (localStream) localStream.getTracks().forEach(t => t.stop());
+            peerConnections.forEach(pc => pc.close());
+            peerConnections.clear();
+            updatePeerCount();
+        }
+    }
+
+    function toggleMute() {
+        isMuted = !isMuted;
+        if (localStream) localStream.getAudioTracks()[0].enabled = !isMuted;
+        document.getElementById('btn-mute').innerText = isMuted ? "إلغاء الكتم" : "كتم المايك";
+    }
+
+    function subscribeRoomSignals() {
+        ws.send(JSON.stringify([
+            "REQ", "room_sub",
+            { kinds: [20000], "#t": [APP_TAG + "-room"], limit: 10 }
+        ]));
+    }
+
+    async function sendSignal(payload, targetPk = null) {
+        const event = {
+            kind: 20000,
+            pubkey: pk,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [["t", APP_TAG + "-room"]],
+            content: JSON.stringify({ ...payload, target: targetPk })
+        };
+        event.id = NostrTools.getEventHash(event);
+        event.sig = NostrTools.signEvent(event, sk);
+        ws.send(JSON.stringify(["EVENT", event]));
+    }
+
+    async function handleSignalingEvent(event) {
+        if (event.pubkey === pk) return;
+        let data;
+        try { data = JSON.parse(event.content); } catch (e) { return; }
+
+        if (data.target && data.target !== pk) return;
+
+        if (data.type === "join") {
+            if (childrenKeys.size < MAX_CHILDREN) {
+                createPeer(event.pubkey, true);
+            }
+        } else if (data.type === "offer") {
+            const pc = createPeer(event.pubkey, false);
+            await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            sendSignal({ type: "answer", answer }, event.pubkey);
+        } else if (data.type === "answer") {
+            const pc = peerConnections.get(event.pubkey);
+            if (pc) await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+        } else if (data.type === "candidate") {
+            const pc = peerConnections.get(event.pubkey);
+            if (pc && data.candidate) await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        }
+    }
+
+    function createPeer(remotePk, isInitiator) {
+        if (peerConnections.has(remotePk)) return peerConnections.get(remotePk);
+
+        const pc = new RTCPeerConnection({
+            iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+        });
+
+        peerConnections.set(remotePk, pc);
+        childrenKeys.add(remotePk);
+
+        if (localStream) {
+            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        }
+
+        pc.ontrack = (evt) => {
+            const audio = new Audio();
+            audio.srcObject = evt.streams[0];
+            audio.play();
+
+            // Forward track to other peers in cascade tree
+            peerConnections.forEach((otherPc, otherPk) => {
+                if (otherPk !== remotePk) {
+                    otherPc.addTrack(evt.track, evt.streams[0]);
+                }
+            });
+        };
+
+        pc.onicecandidate = (evt) => {
+            if (evt.candidate) {
+                sendSignal({ type: "candidate", candidate: evt.candidate }, remotePk);
+            }
+        };
+
+        if (isInitiator) {
+            pc.onnegotiationneeded = async () => {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                sendSignal({ type: "offer", offer }, remotePk);
+            };
+        }
+
+        updatePeerCount();
+        return pc;
+    }
+
+    function updatePeerCount() {
+        document.getElementById('peers-count').innerText = `المتصلون المباشرون: ${peerConnections.size}`;
+    }
+
+    function escapeHtml(str) {
+        return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
+    }
+
+    window.onload = init;
 </script>
 </body>
 </html>
