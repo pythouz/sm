@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulse — تجربة حية</title>
+<style>
+  body { font-family: Tahoma, Arial, sans-serif; background:#0f1115; color:#e8e8e8; max-width:640px; margin:0 auto; padding:16px; }
+  h1 { font-size:20px; }
+  #status { font-size:13px; color:#9aa; margin-bottom:12px; }
+  .ok { color:#4caf50; }
+  textarea { width:100%; box-sizing:border-box; padding:10px; border-radius:8px; border:1px solid #333; background:#1a1d24; color:#eee; font-family:inherit; font-size:15px; }
+  button { padding:8px 16px; border-radius:8px; border:none; background:#5865f2; color:#fff; cursor:pointer; font-size:14px; margin-top:8px; }
+  button:hover { background:#4752c4; }
+  button:disabled { background:#444; cursor:not-allowed; }
+  .post { background:#1a1d24; border:1px solid #2a2d34; border-radius:10px; padding:12px; margin-top:12px; }
+  .post .meta { font-size:12px; color:#888; margin-bottom:6px; }
+  .post .content { font-size:15px; margin-bottom:8px; white-space:pre-wrap; }
+  .actions { display:flex; gap:10px; align-items:center; }
+  .actions button { margin-top:0; padding:5px 12px; font-size:13px; background:#2a2d34; }
+  .actions button.liked { background:#c2185b; }
+  .reply-box { display:none; margin-top:8px; }
+  .reply-box.open { display:flex; gap:6px; }
+  .reply-box input { flex:1; padding:6px 10px; border-radius:6px; border:1px solid #333; background:#0f1115; color:#eee; }
+  .replies { margin-top:8px; padding-right:14px; border-right:2px solid #333; }
+  .reply { font-size:13px; color:#ccc; margin-top:6px; }
+  .likecount { font-size:13px; color:#aaa; }
+</style>
+</head>
+<body>
+
+<h1>Pulse — تجربة حية على شبكة Nostr</h1>
+<div id="status">بيتصل بالـ relays...</div>
+
+<div id="identity" style="font-size:12px; color:#888; margin-bottom:16px;"></div>
+
+<textarea id="postInput" rows="3" placeholder="اكتب منشور..."></textarea>
+<button id="postBtn">انشر</button>
+
+<div id="feed"></div>
+
+<script type="module">
+import { SimplePool, finalizeEvent, generateSecretKey, getPublicKey, nip19 } from 'https://esm.sh/nostr-tools@2.24.2';
+
+const RELAYS = ['wss://relay.damus.io', 'wss://relay.primal.net', 'wss://nos.lol'];
+const pool = new SimplePool();
+const statusEl = document.getElementById('status');
+const feedEl = document.getElementById('feed');
+const identityEl = document.getElementById('identity');
+
+function bytesToHex(bytes) { return [...bytes].map(b => b.toString(16).padStart(2,'0')).join(''); }
+function hexToBytes(hex) { return Uint8Array.from(hex.match(/.{2}/g).map(b => parseInt(b,16))); }
+
+// هوية محفوظة في المتصفح (localStorage)
+let sk = localStorage.getItem('pulse_sk');
+if (!sk) {
+  sk = bytesToHex(generateSecretKey());
+  localStorage.setItem('pulse_sk', sk);
+}
+const skBytes = hexToBytes(sk);
+const pk = getPublicKey(skBytes);
+identityEl.textContent = 'هويتك: ' + nip19.npubEncode(pk);
+
+const posts = new Map(); // id -> {event, likes:Set, replies:[]}
+
+function render() {
+  feedEl.innerHTML = '';
+  const sorted = [...posts.values()].sort((a, b) => b.event.created_at - a.event.created_at);
+  for (const p of sorted) {
+    const div = document.createElement('div');
+    div.className = 'post';
+    const liked = p.likes.has(pk);
+    div.innerHTML = `
+      <div class="meta">${p.event.pubkey.slice(0,8)}... · ${new Date(p.event.created_at*1000).toLocaleTimeString('ar-EG')}</div>
+      <div class="content"></div>
+      <div class="actions">
+        <button class="likeBtn ${liked?'liked':''}">${liked?'❤️ لايك':'🤍 لايك'}</button>
+        <span class="likecount">${p.likes.size}</span>
+        <button class="replyBtn">💬 رد</button>
+      </div>
+      <div class="reply-box"><input placeholder="اكتب رد..."><button class="sendReply">إرسال</button></div>
+      <div class="replies"></div>
+    `;
+    div.querySelector('.content').textContent = p.event.content;
+    div.querySelector('.likeBtn').onclick = () => doLike(p.event);
+    const box = div.querySelector('.reply-box');
+    div.querySelector('.replyBtn').onclick = () => box.classList.toggle('open');
+    div.querySelector('.sendReply').onclick = () => {
+      const input = box.querySelector('input');
+      if (input.value.trim()) { doReply(p.event, input.value.trim()); input.value=''; box.classList.remove('open'); }
+    };
+    const repliesEl = div.querySelector('.replies');
+    p.replies.sort((a,b)=>a.created_at-b.created_at).forEach(r => {
+      const rd = document.createElement('div');
+      rd.className = 'reply';
+      rd.textContent = `${r.pubkey.slice(0,8)}...: ${r.content}`;
+      repliesEl.appendChild(rd);
+    });
+    feedEl.appendChild(div);
+  }
+}
+
+function ensurePost(event) {
+  if (!posts.has(event.id)) posts.set(event.id, { event, likes: new Set(), replies: [] });
+  return posts.get(event.id);
+}
+
+async function publish(event) {
+  const results = await Promise.allSettled(pool.publish(RELAYS, event));
+  const ok = results.filter(r => r.status === 'fulfilled').length;
+  console.log(`kind ${event.kind} → ${ok}/${RELAYS.length}`);
+  return event;
+}
+
+document.getElementById('postBtn').onclick = async () => {
+  const input = document.getElementById('postInput');
+  const content = input.value.trim();
+  if (!content) return;
+  const event = finalizeEvent({ kind:1, created_at:Math.floor(Date.now()/1000), tags:[], content }, skBytes);
+  ensurePost(event);
+  render();
+  input.value = '';
+  await publish(event);
+};
+
+async function doLike(target) {
+  const event = finalizeEvent({ kind:7, created_at:Math.floor(Date.now()/1000), tags:[['e',target.id],['p',target.pubkey]], content:'+' }, skBytes);
+  posts.get(target.id).likes.add(pk);
+  render();
+  await publish(event);
+}
+
+async function doReply(target, content) {
+  const event = finalizeEvent({ kind:1, created_at:Math.floor(Date.now()/1000), tags:[['e',target.id,'','reply'],['p',target.pubkey]], content }, skBytes);
+  posts.get(target.id).replies.push(event);
+  render();
+  await publish(event);
+}
+
+// الاستماع للشبكة: منشورات جديدة، لايكات، ردود
+pool.subscribeMany(RELAYS, { kinds:[1,7], since: Math.floor(Date.now()/1000) - 3600, limit:100 }, {
+  onevent(event) {
+    if (event.kind === 1) {
+      const replyTag = event.tags.find(t => t[0]==='e');
+      if (replyTag) {
+        const parent = posts.get(replyTag[1]);
+        if (parent) { parent.replies.push(event); render(); }
+      } else {
+        ensurePost(event);
+        render();
+      }
+    } else if (event.kind === 7) {
+      const eTag = event.tags.find(t => t[0]==='e');
+      if (eTag) {
+        const parent = posts.get(eTag[1]);
+        if (parent) { parent.likes.add(event.pubkey); render(); }
+      }
+    }
+  },
+  oneose() {
+    statusEl.innerHTML = '<span class="ok">متصل ✓ — بيستقبل المنشورات لحظياً</span>';
+  }
+});
+</script>
+</body>
+</html>
