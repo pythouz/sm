@@ -2,321 +2,507 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pulse Live - Voice Room</title>
-
-    <!-- Manifest & Mobile Meta -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulse - Voice Studio</title>
+    
+    <!-- PWA Meta Tags & Manifest -->
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#121212">
+    <meta name="theme-color" content="#0b0f19">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Pulse">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3687/3687416.png">
 
-    <!-- PeerJS & Nostr Libraries -->
+    <!-- External Libraries -->
+    <script src="https://unpkg.com/nostr-tools@1.17.0/lib/nostr.bundle.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="https://unpkg.com/nostr-tools/lib/nostr.bundle.js"></script>
 
     <style>
         :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --primary: #6366f1;
-            --primary-hover: #4f46e5;
+            --bg: #0b0f19;
+            --card: #151d2a;
+            --border: #232d3f;
+            --accent: #4f46e5;
             --danger: #ef4444;
-            --text: #f8fafc;
-            --text-muted: #94a3b8;
+            --success: #10b981;
+            --text: #f3f4f6;
+            --muted: #9ca3af;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background: var(--bg); 
+            color: var(--text); 
+            padding: 20px; 
+            display: flex; 
+            justify-content: center; 
+        }
+        .container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 16px; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+        h2 { font-size: 1.1rem; color: #a5b4fc; margin-bottom: 12px; }
+        
+        input, textarea { 
+            width: 100%; 
+            background: #070a12; 
+            border: 1px solid var(--border); 
+            border-radius: 8px; 
+            color: var(--text); 
+            padding: 10px; 
+            margin-bottom: 10px; 
+            outline: none; 
+        }
+        textarea { height: 70px; resize: none; }
+
+        .btn { 
+            background: var(--accent); 
+            color: white; 
+            border: none; 
+            padding: 10px 16px; 
+            border-radius: 8px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            width: 100%; 
+        }
+        .btn-danger { background: var(--danger); }
+        .btn-success { background: var(--success); color: #000; }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .status-bar { 
+            font-size: 0.85rem; 
+            color: var(--muted); 
+            margin-top: 10px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        .badge { background: var(--border); padding: 3px 8px; border-radius: 6px; font-size: 0.8rem; }
+        .rejoin-banner { 
+            background: #1e1b4b; 
+            border: 1px solid #4338ca; 
+            padding: 12px; 
+            border-radius: 8px; 
+            margin-bottom: 10px; 
+            display: none; 
+            text-align: center; 
         }
 
-        body {
-            background-color: var(--bg-color);
-            color: var(--text);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 480px;
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-            text-align: center;
-        }
-
-        h1 {
-            font-size: 1.5rem;
-            margin-bottom: 8px;
-            color: var(--primary);
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            background: #334155;
-            color: var(--text-muted);
-            margin-bottom: 20px;
-        }
-
-        .status-badge.active {
-            background: #065f46;
-            color: #34d399;
-        }
-
-        .controls {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            margin-top: 20px;
-        }
-
-        button {
-            flex: 1;
-            padding: 14px;
-            border: none;
-            border-radius: 10px;
-            font-weight: bold;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .btn-join {
-            background: var(--primary);
-            color: white;
-        }
-
-        .btn-join:hover {
-            background: var(--primary-hover);
-        }
-
-        .btn-leave {
-            background: var(--danger);
-            color: white;
-        }
-
-        .audio-container {
-            display: none;
-        }
+        .feed-item { border-bottom: 1px solid var(--border); padding: 10px 0; }
+        .feed-item:last-child { border-bottom: none; }
+        .feed-header { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>Pulse Live Voice Room</h1>
-        <div id="status" class="status-badge">غير متصل بالخادم</div>
+<div class="container">
+    <!-- بنر إعادة الاتصال بعد Refresh -->
+    <div id="rejoin-banner" class="rejoin-banner">
+        <p style="font-size:0.9rem; margin-bottom:8px;">كنت متصلاً بغرفة <b id="rejoin-room-name"></b> قبل التحديث.</p>
+        <button class="btn btn-success" onclick="rejoinPreviousRoom()">إعادة الاتصال الفوري 🎙️</button>
+    </div>
 
-        <div class="controls">
-            <button id="toggleBtn" class="btn-join" onclick="toggleRoom()">دخول الغرفة الصوتية</button>
+    <!-- الغرفة الصوتية -->
+    <div class="card">
+        <h2>الغرفة الصوتية (Radio Voice Studio)</h2>
+        <input type="text" id="room-input" placeholder="اسم الغرفة" value="pulse-main-room" />
+        <div style="display: flex; gap: 10px;">
+            <button class="btn" id="btn-join" onclick="toggleRoom()">دخول الغرفة</button>
+            <button class="btn btn-danger" id="btn-mute" onclick="toggleMute()" disabled style="width: 40%;">كتم المايك</button>
+        </div>
+        <div class="status-bar">
+            <span id="vad-status">الحالة: غير متصل</span>
+            <span id="peer-count" class="badge">الأشخاص: 0</span>
         </div>
     </div>
 
-    <!-- العناصر الصوتية في المخفي -->
-    <div class="audio-container">
-        <audio id="silentAudio" loop playsinline webkit-playsinline></audio>
-        <div id="remoteAudios"></div>
+    <!-- Nostr Feed -->
+    <div class="card">
+        <h2>التغذية المباشرة (Nostr Feed)</h2>
+        <textarea id="post-input" placeholder="اكتب منشوراً..."></textarea>
+        <button class="btn" onclick="publishPost()">نشر</button>
+        <div id="feed-container" style="margin-top: 15px;"></div>
     </div>
+</div>
 
-    <script>
-        // --- 1. إعدادات الشبكة المتعددة (Relays & Peer) ---
-        const RELAYS = [
-            'wss://relay.damus.io',
-            'wss://nos.lol'
-        ];
-        
-        let inRoom = false;
-        let localStream = null;
-        let peer = null;
-        let activeSockets = [];
-        let keepAliveTimer = null;
-        let wakeLock = null;
+<div id="audio-container" style="display:none;"></div>
 
-        // Base64 WAV صامت لحماية عملية الميديا في الخلفية
-        const SILENT_AUDIO_BASE64 = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
-        const silentAudioEl = document.getElementById('silentAudio');
-        const statusEl = document.getElementById('status');
-        const toggleBtn = document.getElementById('toggleBtn');
+<script>
+    const APP_TAG = "pulse-v10-pwa";
+    const NOSTR_RELAY = "wss://relay.damus.io";
 
-        // --- 2. محرك البقاء حياً في الخلفية (Background Engine) ---
-        function initBackgroundEngine() {
-            // أ) تشغيل الصوت الصامت وتفعيل MediaSession API
-            silentAudioEl.src = SILENT_AUDIO_BASE64;
-            silentAudioEl.play().then(() => {
-                if ('mediaSession' in navigator) {
-                    navigator.mediaSession.metadata = new MediaMetadata({
-                        title: "Pulse Live Voice Room",
-                        artist: "مكالمة صوتية نشطة",
-                        album: "Pulse Background Service"
-                    });
+    let peer = null;
+    let localStream = null;
+    let myPeerId = "";
+    let currentRoom = "";
+    let inRoom = false;
+    let isMuted = false;
+    let activeCalls = new Map();
+    
+    let audioCtx = null;
+    let bgAudioCtx = null;
+    let silentAudioEl = null;
+    let wakeLock = null;
+    let sk, pk, ws;
 
-                    // تجميع أحداث الوسائط لمنع الموبايل من إيقاف الخدمة
-                    navigator.mediaSession.setActionHandler('play', () => silentAudioEl.play());
-                    navigator.mediaSession.setActionHandler('pause', () => silentAudioEl.play());
+    // --- 1. Service Worker Registration (PWA) ---
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(() => console.log('PWA Service Worker Registered'))
+                .catch(err => console.error('SW Registration Error:', err));
+        });
+    }
+
+    // --- 2. Key Management ---
+    function getPrivateKey() {
+        let saved = localStorage.getItem('nostr_sk_v10');
+        if (saved) return saved;
+
+        let skHex = "";
+        try {
+            if (typeof NostrTools !== 'undefined') {
+                if (typeof NostrTools.generatePrivateKey === 'function') {
+                    skHex = NostrTools.generatePrivateKey();
+                } else if (typeof NostrTools.generateSecretKey === 'function') {
+                    const bytes = NostrTools.generateSecretKey();
+                    skHex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
                 }
-            }).catch(err => console.warn("Background audio engine error:", err));
-
-            // ب) منع الشاشة والنظام من الخمول عبر Screen Wake Lock API
-            requestWakeLock();
-        }
-
-        async function requestWakeLock() {
-            try {
-                if ('wakeLock' in navigator) {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                }
-            } catch (err) {
-                console.warn("Wake Lock Error:", err.message);
             }
+        } catch(e) {}
+
+        if (!skHex) {
+            const array = new Uint8Array(32);
+            crypto.getRandomValues(array);
+            skHex = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
-        // --- 3. نبضات الحفاظ على الـ WebSockets (Heartbeat) ---
-        function startHeartbeat() {
-            stopHeartbeat();
-            keepAliveTimer = setInterval(() => {
-                if (inRoom) {
-                    // إرسال PING إلى الـ Relays الحية
-                    activeSockets.forEach(ws => {
-                        if (ws && ws.readyState === WebSocket.OPEN) {
-                            ws.send(JSON.stringify(["PING"]));
-                        }
-                    });
+        localStorage.setItem('nostr_sk_v10', skHex);
+        return skHex;
+    }
 
-                    // التأكد من استمرار عمل الصوت عند العودة من القفل
-                    if (silentAudioEl.paused) {
-                        silentAudioEl.play().catch(() => {});
-                    }
-                }
-            }, 10000); // كل 10 ثوانٍ
+    // --- 3. App Initialization ---
+    async function init() {
+        sk = getPrivateKey();
+        pk = NostrTools.getPublicKey(sk);
+
+        const savedRoom = localStorage.getItem('active_voice_room');
+        if (savedRoom) {
+            document.getElementById('rejoin-room-name').innerText = savedRoom;
+            document.getElementById('rejoin-banner').style.display = 'block';
+            document.getElementById('room-input').value = savedRoom;
         }
 
-        function stopHeartbeat() {
-            if (keepAliveTimer) clearInterval(keepAliveTimer);
-        }
+        ws = new WebSocket(NOSTR_RELAY);
+        ws.onopen = () => subscribeFeed();
+        ws.onmessage = (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                if (data[0] === "EVENT" && data[2].kind === 1) renderPost(data[2]);
+                else if (data[0] === "EVENT" && data[2].kind === 20000) handleRoomDiscovery(JSON.parse(data[2].content));
+            } catch(err){}
+        };
 
-        // --- 4. معالجة أحداث قفل الشاشة والعودة (Visibility API) ---
-        document.addEventListener('visibilitychange', async () => {
-            if (document.visibilityState === 'visible' && inRoom) {
-                // إعادة طلب الـ WakeLock إذا فقد أثناء القفل
-                await requestWakeLock();
+        initPeerJS();
+    }
 
-                // استئناف الـ AudioContext إذا قام النظام بتجميده
-                if (peer && peer.disconnected) {
-                    peer.reconnect();
-                }
+    function initPeerJS() {
+        myPeerId = "pulse-" + Math.random().toString(36).substring(2, 9);
+        peer = new Peer(myPeerId, {
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelay', credential: 'openrelay' },
+                    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelay', credential: 'openrelay' }
+                ]
             }
         });
 
-        // --- 5. منطق الدخول/الخروج وتأسيس الصوت ---
-        async function toggleRoom() {
-            if (!inRoom) {
-                try {
-                    // طلب إذن المايك مع تعطيل الآليات المسؤولة عن خفض الصوت تلقائياً
-                    localStream = await navigator.mediaDevices.getUserMedia({
-                        audio: {
-                            echoCancellation: true,
-                            noiseSuppression: true,
-                            autoGainControl: true
-                        },
-                        video: false
-                    });
+        peer.on('call', (call) => {
+            if (!inRoom) return;
+            call.answer(localStream);
+            handleCallEvents(call);
+        });
+    }
 
-                    // تفعيل محرك الخلفية ونبضات Websocket
-                    initBackgroundEngine();
-                    connectRelays();
-                    initPeerJS();
+    // --- 4. Room & Voice Controls ---
+    async function rejoinPreviousRoom() {
+        document.getElementById('rejoin-banner').style.display = 'none';
+        await toggleRoom();
+    }
 
-                    inRoom = true;
-                    statusEl.innerText = "متصل - الغرفة نشطة (في الخلفية)";
-                    statusEl.classList.add('active');
-                    toggleBtn.innerText = "مغادرة الغرفة";
-                    toggleBtn.className = "btn-leave";
+    async function toggleRoom() {
+        const btn = document.getElementById('btn-join');
+        const roomInput = document.getElementById('room-input');
 
-                    startHeartbeat();
+        if (!inRoom) {
+            currentRoom = roomInput.value.trim().toLowerCase() || "pulse-main-room";
 
-                } catch (err) {
-                    alert("تعذر الوصول للميكروفون: " + err.message);
-                }
-            } else {
-                leaveRoom();
-            }
-        }
-
-        function connectRelays() {
-            activeSockets = RELAYS.map(url => {
-                const ws = new WebSocket(url);
-                ws.onopen = () => console.log(`Connected to relay: ${url}`);
-                ws.onerror = (e) => console.warn(`Relay error ${url}:`, e);
-                return ws;
-            });
-        }
-
-        function initPeerJS() {
-            peer = new Peer();
-
-            peer.on('open', (id) => {
-                console.log('Peer ID Generated:', id);
-            });
-
-            peer.on('call', (call) => {
-                call.answer(localStream);
-                call.on('stream', (remoteStream) => {
-                    addRemoteAudioStream(call.peer, remoteStream);
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        channelCount: 1,
+                        sampleRate: 48000
+                    }
                 });
+            } catch (e) {
+                alert("يرجى إعطاء صلاحية المايك للاتصال");
+                return;
+            }
+
+            startBackgroundAudioEngine();
+            requestSystemLock();
+
+            inRoom = true;
+            localStorage.setItem('active_voice_room', currentRoom);
+            document.getElementById('rejoin-banner').style.display = 'none';
+
+            btn.innerText = "مغادرة الغرفة";
+            btn.classList.add("btn-danger");
+            roomInput.disabled = true;
+            document.getElementById('btn-mute').disabled = false;
+
+            announcePresence();
+            setupVAD();
+        } else {
+            leaveRoom();
+        }
+    }
+
+    // محرك الميديا الصوتي للحفاظ على الجلسة حية عند قفل الشاشة
+    function startBackgroundAudioEngine() {
+        if (!silentAudioEl) {
+            try {
+                bgAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = bgAudioCtx.createOscillator();
+                const gain = bgAudioCtx.createGain();
+                
+                gain.gain.value = 0.0001; // صوت شبه صامت لتفعيل الميديا
+                osc.connect(gain);
+                
+                const dst = bgAudioCtx.createMediaStreamDestination();
+                gain.connect(dst);
+                osc.start();
+
+                silentAudioEl = document.createElement('audio');
+                silentAudioEl.id = 'keep-alive-stream';
+                silentAudioEl.srcObject = dst.stream;
+                silentAudioEl.autoplay = true;
+                silentAudioEl.playsInline = true;
+                document.body.appendChild(silentAudioEl);
+
+                silentAudioEl.play().catch(() => {});
+                enableMediaSession();
+            } catch (e) {
+                console.error("BG Audio Engine Error:", e);
+            }
+        } else {
+            if (bgAudioCtx && bgAudioCtx.state === 'suspended') bgAudioCtx.resume();
+            silentAudioEl.play().catch(() => {});
+        }
+    }
+
+    function enableMediaSession() {
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: "Pulse Live Voice",
+                artist: "المكالمة نشطة في الخلفية",
+                album: "Pulse Studio"
             });
+            navigator.mediaSession.playbackState = "playing";
+            
+            navigator.mediaSession.setActionHandler('play', () => {
+                if (bgAudioCtx && bgAudioCtx.state === 'suspended') bgAudioCtx.resume();
+                if (silentAudioEl) silentAudioEl.play();
+                document.querySelectorAll('#audio-container audio').forEach(a => a.play());
+            });
+            navigator.mediaSession.setActionHandler('pause', () => {}); // منع إيقاف الجلسة تلقائياً
+        }
+    }
+
+    async function requestSystemLock() {
+        try {
+            if ('wakeLock' in navigator) {
+                wakeLock = await navigator.wakeLock.request('screen');
+            }
+            if ('locks' in navigator) {
+                navigator.locks.request('pulse_voice_lock', { mode: 'exclusive' }, async () => {
+                    await new Promise(() => {});
+                });
+            }
+        } catch (e) {}
+    }
+
+    function leaveRoom() {
+        inRoom = false;
+        localStorage.removeItem('active_voice_room');
+        document.getElementById('rejoin-banner').style.display = 'none';
+
+        const btn = document.getElementById('btn-join');
+        btn.innerText = "دخول الغرفة";
+        btn.classList.remove("btn-danger");
+        document.getElementById('room-input').disabled = false;
+        document.getElementById('btn-mute').disabled = true;
+
+        if (silentAudioEl) {
+            silentAudioEl.pause();
+            silentAudioEl.remove();
+            silentAudioEl = null;
         }
 
-        function addRemoteAudioStream(peerId, stream) {
-            let audio = document.getElementById(`audio-${peerId}`);
+        if (bgAudioCtx) {
+            bgAudioCtx.close();
+            bgAudioCtx = null;
+        }
+
+        if (wakeLock) { wakeLock.release(); wakeLock = null; }
+        if (localStream) localStream.getTracks().forEach(t => t.stop());
+
+        activeCalls.forEach(call => call.close());
+        activeCalls.clear();
+        document.getElementById('audio-container').innerHTML = "";
+        document.getElementById('peer-count').innerText = "الأشخاص: 0";
+        document.getElementById('vad-status').innerText = "الحالة: غير متصل";
+    }
+
+    function toggleMute() {
+        isMuted = !isMuted;
+        if (localStream) localStream.getAudioTracks()[0].enabled = !isMuted;
+        document.getElementById('btn-mute').innerText = isMuted ? "إلغاء الكتم" : "كتم المايك";
+    }
+
+    // --- 5. Peer & Nostr Call Handling ---
+    function announcePresence() {
+        if (!inRoom || !ws || ws.readyState !== WebSocket.OPEN) return;
+        const evt = {
+            kind: 20000,
+            pubkey: pk,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [["t", APP_TAG + "-" + currentRoom]],
+            content: JSON.stringify({ peerId: myPeerId })
+        };
+        evt.id = NostrTools.getEventHash(evt);
+        evt.sig = NostrTools.signEvent(evt, sk);
+        ws.send(JSON.stringify(["EVENT", evt]));
+
+        ws.send(JSON.stringify([
+            "REQ", "room_sub",
+            { kinds: [20000], "#t": [APP_TAG + "-" + currentRoom], limit: 10 }
+        ]));
+    }
+
+    function handleRoomDiscovery(data) {
+        if (!inRoom || !data.peerId || data.peerId === myPeerId) return;
+        if (!activeCalls.has(data.peerId)) {
+            const call = peer.call(data.peerId, localStream);
+            if (call) handleCallEvents(call);
+        }
+    }
+
+    function handleCallEvents(call) {
+        activeCalls.set(call.peer, call);
+
+        call.on('stream', (remoteStream) => {
+            let audio = document.getElementById("audio-" + call.peer);
             if (!audio) {
                 audio = document.createElement('audio');
-                audio.id = `audio-${peerId}`;
+                audio.id = "audio-" + call.peer;
                 audio.autoplay = true;
-                audio.playsinline = true;
-                audio.setAttribute('webkit-playsinline', '');
-                document.getElementById('remoteAudios').appendChild(audio);
+                audio.playsInline = true;
+                document.getElementById('audio-container').appendChild(audio);
             }
-            audio.srcObject = stream;
-        }
+            audio.srcObject = remoteStream;
+            audio.play().then(() => enableMediaSession()).catch(() => {});
+            updatePeerCount();
+        });
 
-        function leaveRoom() {
-            inRoom = false;
-            stopHeartbeat();
+        call.on('close', () => removePeerCall(call.peer));
+        call.on('error', () => removePeerCall(call.peer));
+    }
 
-            // إغلاق المايك
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-            }
+    function removePeerCall(peerId) {
+        const audio = document.getElementById("audio-" + peerId);
+        if (audio) audio.remove();
+        activeCalls.delete(peerId);
+        updatePeerCount();
+    }
 
-            // إغلاق الاتصالات
-            if (peer) peer.destroy();
-            activeSockets.forEach(ws => ws.close());
-            activeSockets = [];
+    function updatePeerCount() {
+        document.getElementById('peer-count').innerText = `الأشخاص: ${activeCalls.size}`;
+    }
 
-            // إيقاف صوت البقاء حيّاً
-            silentAudioEl.pause();
-            if (wakeLock) {
-                wakeLock.release().catch(() => {});
-                wakeLock = null;
-            }
+    // --- 6. Voice Activity Detection ---
+    function setupVAD() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        
+        const source = audioCtx.createMediaStreamSource(localStream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
 
-            // استعادة الواجهة
-            statusEl.innerText = "غير متصل بالخادم";
-            statusEl.classList.remove('active');
-            toggleBtn.innerText = "دخول الغرفة الصوتية";
-            toggleBtn.className = "btn-join";
-        }
-    </script>
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const interval = setInterval(() => {
+            if (!inRoom) { clearInterval(interval); return; }
+            if (isMuted) { document.getElementById('vad-status').innerText = "الحالة: مكتوم"; return; }
+            analyser.getByteFrequencyData(data);
+            const vol = data.reduce((a, b) => a + b, 0) / data.length;
+            document.getElementById('vad-status').innerText = vol > 12 ? "الحالة: تتحدث الآن 🎙️" : "الحالة: متصل (صامت)";
+        }, 200);
+    }
+
+    // --- 7. Nostr Feed ---
+    function subscribeFeed() {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        ws.send(JSON.stringify([
+            "REQ", "feed_sub",
+            { kinds: [1], "#t": [APP_TAG], limit: 15 }
+        ]));
+    }
+
+    function publishPost() {
+        const input = document.getElementById('post-input');
+        const text = input.value.trim();
+        if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+        const evt = {
+            kind: 1,
+            pubkey: pk,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [["t", APP_TAG]],
+            content: text
+        };
+        evt.id = NostrTools.getEventHash(evt);
+        evt.sig = NostrTools.signEvent(evt, sk);
+
+        ws.send(JSON.stringify(["EVENT", evt]));
+        input.value = "";
+    }
+
+    const seenEvents = new Set();
+    function renderPost(evt) {
+        if (seenEvents.has(evt.id)) return;
+        seenEvents.add(evt.id);
+
+        const container = document.getElementById('feed-container');
+        const div = document.createElement('div');
+        div.className = 'feed-item';
+        div.innerHTML = `
+            <div class="feed-header">${evt.pubkey.substring(0, 8)}... • ${new Date(evt.created_at * 1000).toLocaleTimeString('ar-EG')}</div>
+            <div>${escapeHtml(evt.content)}</div>
+        `;
+        container.prepend(div);
+    }
+
+    function escapeHtml(str) {
+        return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
+    }
+
+    window.onload = init;
+</script>
 </body>
 </html>
