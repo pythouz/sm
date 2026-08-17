@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pulse — تجربة حية</title>
+<title>Pulse — المنشورات اللحظية</title>
 <style>
   body { font-family: Tahoma, Arial, sans-serif; background:#0f1115; color:#e8e8e8; max-width:640px; margin:0 auto; padding:16px; }
   h1 { font-size:20px; }
@@ -52,7 +52,6 @@ const identityEl = document.getElementById('identity');
 function bytesToHex(bytes) { return [...bytes].map(b => b.toString(16).padStart(2,'0')).join(''); }
 function hexToBytes(hex) { return Uint8Array.from(hex.match(/.{2}/g).map(b => parseInt(b,16))); }
 
-// هوية محفوظة في المتصفح (localStorage)
 let sk = localStorage.getItem('pulse_sk');
 if (!sk) {
   sk = bytesToHex(generateSecretKey());
@@ -62,8 +61,8 @@ const skBytes = hexToBytes(sk);
 const pk = getPublicKey(skBytes);
 identityEl.textContent = 'هويتك: ' + nip19.npubEncode(pk);
 
-const posts = new Map(); // id -> {event, likes:Set, replies:[]}
-const orphanReactions = []; // {targetId, type:'like'|'reply', event}
+const posts = new Map();
+const orphanReactions = [];
 const seenEventIds = new Set();
 
 function attachOrphans(postId) {
@@ -156,7 +155,6 @@ async function doReply(target, content) {
   await publish(event);
 }
 
-// الاستماع لمنشوراتك انت بس (مش كل شبكة Nostr العامة)
 pool.subscribeMany(RELAYS, { kinds:[1,7], '#t':[APP_TAG], limit:100 }, {
   onevent(event) {
     if (seenEventIds.has(event.id)) return;
