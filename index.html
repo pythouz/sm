@@ -3,9 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pulse Live - Voice Studio</title>
+    <title>Pulse - Voice Studio</title>
+    
+    <!-- PWA Meta Tags & Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0b0f19">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Pulse">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3687/3687416.png">
+
+    <!-- External Libraries -->
     <script src="https://unpkg.com/nostr-tools@1.17.0/lib/nostr.bundle.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
     <style>
         :root {
             --bg: #0b0f19;
@@ -19,22 +31,62 @@
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background: var(--bg); 
+            color: var(--text); 
+            padding: 20px; 
+            display: flex; 
+            justify-content: center; 
+        }
         .container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 16px; }
         .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
         h2 { font-size: 1.1rem; color: #a5b4fc; margin-bottom: 12px; }
         
-        input, textarea { width: 100%; background: #070a12; border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px; margin-bottom: 10px; outline: none; }
+        input, textarea { 
+            width: 100%; 
+            background: #070a12; 
+            border: 1px solid var(--border); 
+            border-radius: 8px; 
+            color: var(--text); 
+            padding: 10px; 
+            margin-bottom: 10px; 
+            outline: none; 
+        }
         textarea { height: 70px; resize: none; }
 
-        .btn { background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; }
+        .btn { 
+            background: var(--accent); 
+            color: white; 
+            border: none; 
+            padding: 10px 16px; 
+            border-radius: 8px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            width: 100%; 
+        }
         .btn-danger { background: var(--danger); }
         .btn-success { background: var(--success); color: #000; }
         .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        .status-bar { font-size: 0.85rem; color: var(--muted); margin-top: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .status-bar { 
+            font-size: 0.85rem; 
+            color: var(--muted); 
+            margin-top: 10px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
         .badge { background: var(--border); padding: 3px 8px; border-radius: 6px; font-size: 0.8rem; }
-        .rejoin-banner { background: #1e1b4b; border: 1px solid #4338ca; padding: 12px; border-radius: 8px; margin-bottom: 10px; display: none; text-align: center; }
+        .rejoin-banner { 
+            background: #1e1b4b; 
+            border: 1px solid #4338ca; 
+            padding: 12px; 
+            border-radius: 8px; 
+            margin-bottom: 10px; 
+            display: none; 
+            text-align: center; 
+        }
 
         .feed-item { border-bottom: 1px solid var(--border); padding: 10px 0; }
         .feed-item:last-child { border-bottom: none; }
@@ -44,12 +96,13 @@
 <body>
 
 <div class="container">
-    <!-- تنبيه إعادة الاتصال بعد الـ Refresh -->
+    <!-- بنر إعادة الاتصال بعد Refresh -->
     <div id="rejoin-banner" class="rejoin-banner">
         <p style="font-size:0.9rem; margin-bottom:8px;">كنت متصلاً بغرفة <b id="rejoin-room-name"></b> قبل التحديث.</p>
         <button class="btn btn-success" onclick="rejoinPreviousRoom()">إعادة الاتصال الفوري 🎙️</button>
     </div>
 
+    <!-- الغرفة الصوتية -->
     <div class="card">
         <h2>الغرفة الصوتية (Radio Voice Studio)</h2>
         <input type="text" id="room-input" placeholder="اسم الغرفة" value="pulse-main-room" />
@@ -63,6 +116,7 @@
         </div>
     </div>
 
+    <!-- Nostr Feed -->
     <div class="card">
         <h2>التغذية المباشرة (Nostr Feed)</h2>
         <textarea id="post-input" placeholder="اكتب منشوراً..."></textarea>
@@ -74,7 +128,7 @@
 <div id="audio-container" style="display:none;"></div>
 
 <script>
-    const APP_TAG = "pulse-v9-bg-audio";
+    const APP_TAG = "pulse-v10-pwa";
     const NOSTR_RELAY = "wss://relay.damus.io";
 
     let peer = null;
@@ -84,12 +138,25 @@
     let inRoom = false;
     let isMuted = false;
     let activeCalls = new Map();
+    
     let audioCtx = null;
+    let bgAudioCtx = null;
+    let silentAudioEl = null;
     let wakeLock = null;
     let sk, pk, ws;
 
+    // --- 1. Service Worker Registration (PWA) ---
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(() => console.log('PWA Service Worker Registered'))
+                .catch(err => console.error('SW Registration Error:', err));
+        });
+    }
+
+    // --- 2. Key Management ---
     function getPrivateKey() {
-        let saved = localStorage.getItem('nostr_sk_v9');
+        let saved = localStorage.getItem('nostr_sk_v10');
         if (saved) return saved;
 
         let skHex = "";
@@ -110,15 +177,15 @@
             skHex = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
-        localStorage.setItem('nostr_sk_v9', skHex);
+        localStorage.setItem('nostr_sk_v10', skHex);
         return skHex;
     }
 
+    // --- 3. App Initialization ---
     async function init() {
         sk = getPrivateKey();
         pk = NostrTools.getPublicKey(sk);
 
-        // التحقق مما إذا كان المستخدم متصلاً قبل الـ Refresh
         const savedRoom = localStorage.getItem('active_voice_room');
         if (savedRoom) {
             document.getElementById('rejoin-room-name').innerText = savedRoom;
@@ -145,7 +212,9 @@
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelay', credential: 'openrelay' },
+                    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelay', credential: 'openrelay' }
                 ]
             }
         });
@@ -157,6 +226,7 @@
         });
     }
 
+    // --- 4. Room & Voice Controls ---
     async function rejoinPreviousRoom() {
         document.getElementById('rejoin-banner').style.display = 'none';
         await toggleRoom();
@@ -174,7 +244,9 @@
                     audio: {
                         echoCancellation: true,
                         noiseSuppression: true,
-                        autoGainControl: true
+                        autoGainControl: true,
+                        channelCount: 1,
+                        sampleRate: 48000
                     }
                 });
             } catch (e) {
@@ -182,7 +254,7 @@
                 return;
             }
 
-            // منع النوم وتجميد المعالج (Screen Wake Lock & Web Lock)
+            startBackgroundAudioEngine();
             requestSystemLock();
 
             inRoom = true;
@@ -201,7 +273,57 @@
         }
     }
 
-    // آلية منع تجميد المعالج والشبكة في الخلفية
+    // محرك الميديا الصوتي للحفاظ على الجلسة حية عند قفل الشاشة
+    function startBackgroundAudioEngine() {
+        if (!silentAudioEl) {
+            try {
+                bgAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = bgAudioCtx.createOscillator();
+                const gain = bgAudioCtx.createGain();
+                
+                gain.gain.value = 0.0001; // صوت شبه صامت لتفعيل الميديا
+                osc.connect(gain);
+                
+                const dst = bgAudioCtx.createMediaStreamDestination();
+                gain.connect(dst);
+                osc.start();
+
+                silentAudioEl = document.createElement('audio');
+                silentAudioEl.id = 'keep-alive-stream';
+                silentAudioEl.srcObject = dst.stream;
+                silentAudioEl.autoplay = true;
+                silentAudioEl.playsInline = true;
+                document.body.appendChild(silentAudioEl);
+
+                silentAudioEl.play().catch(() => {});
+                enableMediaSession();
+            } catch (e) {
+                console.error("BG Audio Engine Error:", e);
+            }
+        } else {
+            if (bgAudioCtx && bgAudioCtx.state === 'suspended') bgAudioCtx.resume();
+            silentAudioEl.play().catch(() => {});
+        }
+    }
+
+    function enableMediaSession() {
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: "Pulse Live Voice",
+                artist: "المكالمة نشطة في الخلفية",
+                album: "Pulse Studio"
+            });
+            navigator.mediaSession.playbackState = "playing";
+            
+            navigator.mediaSession.setActionHandler('play', () => {
+                if (bgAudioCtx && bgAudioCtx.state === 'suspended') bgAudioCtx.resume();
+                if (silentAudioEl) silentAudioEl.play();
+                document.querySelectorAll('#audio-container audio').forEach(a => a.play());
+            });
+            navigator.mediaSession.setActionHandler('pause', () => {}); // منع إيقاف الجلسة تلقائياً
+        }
+    }
+
     async function requestSystemLock() {
         try {
             if ('wakeLock' in navigator) {
@@ -209,7 +331,7 @@
             }
             if ('locks' in navigator) {
                 navigator.locks.request('pulse_voice_lock', { mode: 'exclusive' }, async () => {
-                    await new Promise(() => {}); // أبق الخيط حي طالما التبويب مفتوح
+                    await new Promise(() => {});
                 });
             }
         } catch (e) {}
@@ -225,6 +347,17 @@
         btn.classList.remove("btn-danger");
         document.getElementById('room-input').disabled = false;
         document.getElementById('btn-mute').disabled = true;
+
+        if (silentAudioEl) {
+            silentAudioEl.pause();
+            silentAudioEl.remove();
+            silentAudioEl = null;
+        }
+
+        if (bgAudioCtx) {
+            bgAudioCtx.close();
+            bgAudioCtx = null;
+        }
 
         if (wakeLock) { wakeLock.release(); wakeLock = null; }
         if (localStream) localStream.getTracks().forEach(t => t.stop());
@@ -242,6 +375,7 @@
         document.getElementById('btn-mute').innerText = isMuted ? "إلغاء الكتم" : "كتم المايك";
     }
 
+    // --- 5. Peer & Nostr Call Handling ---
     function announcePresence() {
         if (!inRoom || !ws || ws.readyState !== WebSocket.OPEN) return;
         const evt = {
@@ -282,7 +416,7 @@
                 document.getElementById('audio-container').appendChild(audio);
             }
             audio.srcObject = remoteStream;
-            audio.play().catch(() => {});
+            audio.play().then(() => enableMediaSession()).catch(() => {});
             updatePeerCount();
         });
 
@@ -301,6 +435,7 @@
         document.getElementById('peer-count').innerText = `الأشخاص: ${activeCalls.size}`;
     }
 
+    // --- 6. Voice Activity Detection ---
     function setupVAD() {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -320,6 +455,7 @@
         }, 200);
     }
 
+    // --- 7. Nostr Feed ---
     function subscribeFeed() {
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
         ws.send(JSON.stringify([
