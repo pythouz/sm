@@ -126,11 +126,13 @@ async function publish(event) {
   return event;
 }
 
+const APP_TAG = 'pulse-mvp-demo-v1';
+
 document.getElementById('postBtn').onclick = async () => {
   const input = document.getElementById('postInput');
   const content = input.value.trim();
   if (!content) return;
-  const event = finalizeEvent({ kind:1, created_at:Math.floor(Date.now()/1000), tags:[], content }, skBytes);
+  const event = finalizeEvent({ kind:1, created_at:Math.floor(Date.now()/1000), tags:[['t',APP_TAG]], content }, skBytes);
   seenEventIds.add(event.id);
   ensurePost(event);
   render();
@@ -139,7 +141,7 @@ document.getElementById('postBtn').onclick = async () => {
 };
 
 async function doLike(target) {
-  const event = finalizeEvent({ kind:7, created_at:Math.floor(Date.now()/1000), tags:[['e',target.id],['p',target.pubkey]], content:'+' }, skBytes);
+  const event = finalizeEvent({ kind:7, created_at:Math.floor(Date.now()/1000), tags:[['e',target.id],['p',target.pubkey],['t',APP_TAG]], content:'+' }, skBytes);
   seenEventIds.add(event.id);
   posts.get(target.id).likes.add(pk);
   render();
@@ -147,7 +149,7 @@ async function doLike(target) {
 }
 
 async function doReply(target, content) {
-  const event = finalizeEvent({ kind:1, created_at:Math.floor(Date.now()/1000), tags:[['e',target.id,'','reply'],['p',target.pubkey]], content }, skBytes);
+  const event = finalizeEvent({ kind:1, created_at:Math.floor(Date.now()/1000), tags:[['e',target.id,'','reply'],['p',target.pubkey],['t',APP_TAG]], content }, skBytes);
   seenEventIds.add(event.id);
   posts.get(target.id).replies.push(event);
   render();
@@ -155,7 +157,7 @@ async function doReply(target, content) {
 }
 
 // الاستماع لمنشوراتك انت بس (مش كل شبكة Nostr العامة)
-pool.subscribeMany(RELAYS, { kinds:[1,7], authors:[pk], limit:50 }, {
+pool.subscribeMany(RELAYS, { kinds:[1,7], '#t':[APP_TAG], limit:100 }, {
   onevent(event) {
     if (seenEventIds.has(event.id)) return;
     seenEventIds.add(event.id);
