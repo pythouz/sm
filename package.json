@@ -12,7 +12,6 @@
   "license": "ISC",
   "dependencies": {
     "nostr-tools": "^2.24.2",
-    "websocket-polyfill": "^1.0.0",
     "ws": "^8.21.3"
   }
 }
