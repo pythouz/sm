@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pulse - Stable P2P Voice</title>
+    <title>Pulse - Broadcast Radio Quality P2P</title>
     <script src="https://unpkg.com/nostr-tools@1.17.0/lib/nostr.bundle.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
@@ -44,7 +44,7 @@
 
 <div class="container">
     <div class="card">
-        <h2>الغرفة الصوتية المباشرة (HD Audio)</h2>
+        <h2>الغرفة الصوتية (Radio Broadcast HD)</h2>
         <input type="text" id="room-input" placeholder="اسم الغرفة" value="pulse-main-room" />
         <div style="display: flex; gap: 10px;">
             <button class="btn" id="btn-join" onclick="toggleRoom()">دخول الغرفة</button>
@@ -67,7 +67,7 @@
 <div id="audio-container" style="display:none;"></div>
 
 <script>
-    const APP_TAG = "pulse-v4-prod";
+    const APP_TAG = "pulse-v5-radio";
     const NOSTR_RELAY = "wss://relay.damus.io";
 
     let peer = null;
@@ -78,26 +78,26 @@
     let isMuted = false;
     let activeCalls = new Map();
     let audioCtx = null;
+    let wakeLock = null;
     let sk, pk, ws;
 
-    // unlock AudioContext globally on first tap
-    document.addEventListener('click', () => {
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        } else if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
-        }
-    }, { once: true });
+    // Background Audio Hack (Silent WAV Loop) to prevent Mobile Lock Disconnect
+    const silentAudio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
+    silentAudio.loop = true;
+
+    // SDP Munger: Force Opus 128kbps High Fidelity Radio Quality
+    function forceRadioQualitySDP(sdp) {
+        return sdp.replace(/a=fmtp:111 .*/g, 'a=fmtp:111 minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1;maxaveragebitrate=128000;cbr=1');
+    }
 
     async function init() {
-        sk = localStorage.getItem('nostr_sk_v4') || NostrTools.generatePrivateKey();
-        localStorage.setItem('nostr_sk_v4', sk);
+        sk = localStorage.getItem('nostr_sk_v5') || NostrTools.generatePrivateKey();
+        localStorage.setItem('nostr_sk_v5', sk);
         pk = NostrTools.getPublicKey(sk);
 
         ws = new WebSocket(NOSTR_RELAY);
         ws.onopen = () => {
             subscribeFeed();
-            // Check session to auto-rejoin room if refreshed
             const savedRoom = sessionStorage.getItem('active_voice_room');
             if (savedRoom) {
                 document.getElementById('room-input').value = savedRoom;
@@ -131,7 +131,7 @@
 
         peer.on('call', (call) => {
             if (!inRoom) return;
-            call.answer(localStream);
+            call.answer(localStream, { sdpTransform: forceRadioQualitySDP });
             handleCallEvents(call);
         });
     }
@@ -144,14 +144,14 @@
             currentRoom = roomInput.value.trim().toLowerCase() || "pulse-main-room";
 
             try {
-                // HQ Audio Constraints to eliminate robotic sound & noise
+                // Radio Quality Microphone Settings (Studio Sound)
                 localStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
                         echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true,
-                        channelCount: 1,
-                        sampleRate: 48000
+                        noiseSuppression: false, // Turn off aggressive gating for raw radio warm tone
+                        autoGainControl: false,  // Preserves dynamic audio range
+                        sampleRate: 48000,
+                        channelCount: 2          // Stereo
                     }
                 });
             } catch (e) {
@@ -159,8 +159,11 @@
                 return;
             }
 
+            // Enable Background Service on Mobile
+            enableMobileBackgroundKeepAlive();
+
             inRoom = true;
-            sessionStorage.setItem('active_voice_room', currentRoom); // Persist across refresh
+            sessionStorage.setItem('active_voice_room', currentRoom);
             btn.innerText = "مغادرة الغرفة";
             btn.classList.add("btn-danger");
             roomInput.disabled = true;
@@ -173,6 +176,23 @@
         }
     }
 
+    async function enableMobileBackgroundKeepAlive() {
+        try {
+            await silentAudio.play();
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: "غرفة Pulse الصوتية",
+                    artist: "بث مباشر P2P (Radio Quality)",
+                    album: "Pulse Studio"
+                });
+                navigator.mediaSession.playbackState = "playing";
+            }
+            if ('wakeLock' in navigator) {
+                wakeLock = await navigator.wakeLock.request('screen');
+            }
+        } catch(e) {}
+    }
+
     function leaveRoom() {
         inRoom = false;
         sessionStorage.removeItem('active_voice_room');
@@ -181,6 +201,9 @@
         btn.classList.remove("btn-danger");
         document.getElementById('room-input').disabled = false;
         document.getElementById('btn-mute').disabled = true;
+
+        silentAudio.pause();
+        if (wakeLock) { wakeLock.release(); wakeLock = null; }
 
         if (localStream) localStream.getTracks().forEach(t => t.stop());
         activeCalls.forEach(call => call.close());
@@ -218,7 +241,7 @@
     function handleRoomDiscovery(data) {
         if (!inRoom || !data.peerId || data.peerId === myPeerId) return;
         if (!activeCalls.has(data.peerId)) {
-            const call = peer.call(data.peerId, localStream);
+            const call = peer.call(data.peerId, localStream, { sdpTransform: forceRadioQualitySDP });
             if (call) handleCallEvents(call);
         }
     }
